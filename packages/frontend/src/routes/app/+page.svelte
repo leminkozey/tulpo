@@ -190,7 +190,7 @@
         <div class="absolute bottom-14 left-2 right-2 bg-bg-tertiary border border-border rounded-lg overflow-hidden z-50">
           <div class="p-3 border-b border-border">
             <p class="text-sm font-semibold text-text-primary">{auth.user?.username}</p>
-            <p class="text-[11px] text-text-muted">{auth.user?.email ?? ''}</p>
+            <p class="text-[11px] text-text-muted">@{auth.user?.username ?? ''}</p>
           </div>
           <button
             onclick={handleSignOut}
