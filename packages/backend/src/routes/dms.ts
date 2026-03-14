@@ -189,16 +189,24 @@ dms.get("/:id/messages", async (c) => {
   // If user left the group, only show messages up to left_at
   const cutoff = participant.left_at;
 
+  const baseSelect = `SELECT m.id, m.content, m.created_at, m.edited_at,
+                u.id as author_id, u.username as author_username,
+                u.display_name as author_display_name, u.avatar_url as author_avatar,
+                m.reply_to_id,
+                CASE WHEN rm.deleted_at IS NOT NULL THEN NULL ELSE rm.content END as reply_to_content,
+                ru.username as reply_to_author_username,
+                ru.display_name as reply_to_author_display_name
+         FROM dm_messages m
+         JOIN users u ON m.author_id = u.id
+         LEFT JOIN dm_message_deletions dmd ON m.id = dmd.dm_message_id AND dmd.user_id = ?
+         LEFT JOIN dm_messages rm ON m.reply_to_id = rm.id
+         LEFT JOIN users ru ON rm.author_id = ru.id`;
+
   let rows;
   if (before) {
     rows = db
       .query(
-        `SELECT m.id, m.content, m.created_at, m.edited_at,
-                u.id as author_id, u.username as author_username,
-                u.display_name as author_display_name, u.avatar_url as author_avatar
-         FROM dm_messages m
-         JOIN users u ON m.author_id = u.id
-         LEFT JOIN dm_message_deletions dmd ON m.id = dmd.dm_message_id AND dmd.user_id = ?
+        `${baseSelect}
          WHERE m.dm_channel_id = ? AND m.created_at < ? AND dmd.dm_message_id IS NULL
          ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
@@ -208,12 +216,7 @@ dms.get("/:id/messages", async (c) => {
   } else {
     rows = db
       .query(
-        `SELECT m.id, m.content, m.created_at, m.edited_at,
-                u.id as author_id, u.username as author_username,
-                u.display_name as author_display_name, u.avatar_url as author_avatar
-         FROM dm_messages m
-         JOIN users u ON m.author_id = u.id
-         LEFT JOIN dm_message_deletions dmd ON m.id = dmd.dm_message_id AND dmd.user_id = ?
+        `${baseSelect}
          WHERE m.dm_channel_id = ? AND dmd.dm_message_id IS NULL
          ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
@@ -229,7 +232,7 @@ dms.get("/:id/messages", async (c) => {
 dms.post("/:id/messages", async (c) => {
   const user = c.get("user");
   const channelId = c.req.param("id");
-  const { content } = await c.req.json();
+  const { content, reply_to_id } = await c.req.json();
 
   if (!content?.trim()) {
     return c.json({ error: "Message content required" }, 400);
@@ -255,14 +258,35 @@ dms.post("/:id/messages", async (c) => {
     return c.json({ error: "Not found" }, 404);
   }
 
+  // Validate reply_to_id if provided
+  let replyData: any = null;
+  if (reply_to_id) {
+    const replyMsg = db
+      .query(
+        `SELECT m.id, m.content, m.deleted_at, u.username, u.display_name
+         FROM dm_messages m JOIN users u ON m.author_id = u.id
+         WHERE m.id = ? AND m.dm_channel_id = ?`
+      )
+      .get(reply_to_id, channelId) as any;
+
+    if (replyMsg) {
+      replyData = {
+        reply_to_id: replyMsg.id,
+        reply_to_content: replyMsg.deleted_at ? null : replyMsg.content,
+        reply_to_author_username: replyMsg.username,
+        reply_to_author_display_name: replyMsg.display_name,
+      };
+    }
+  }
+
   // Insert message
   const msg = db
     .query(
-      `INSERT INTO dm_messages (dm_channel_id, author_id, content)
-       VALUES (?, ?, ?)
+      `INSERT INTO dm_messages (dm_channel_id, author_id, content, reply_to_id)
+       VALUES (?, ?, ?, ?)
        RETURNING id, created_at`
     )
-    .get(channelId, user.id, content.trim()) as any;
+    .get(channelId, user.id, content.trim(), reply_to_id || null) as any;
 
   const message = {
     id: msg.id,
@@ -273,6 +297,10 @@ dms.post("/:id/messages", async (c) => {
     author_username: user.username,
     author_display_name: user.display_name,
     author_avatar: user.avatar_url,
+    reply_to_id: replyData?.reply_to_id || null,
+    reply_to_content: replyData?.reply_to_content || null,
+    reply_to_author_username: replyData?.reply_to_author_username || null,
+    reply_to_author_display_name: replyData?.reply_to_author_display_name || null,
   };
 
   // Send to other active participant(s) via WS

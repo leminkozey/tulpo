@@ -89,6 +89,9 @@
   // Message delete menu
   let deleteMenu = $state<{ messageId: string; x: number; y: number; canDeleteForEveryone: boolean } | null>(null);
 
+  // Reply state
+  let replyingTo = $state<{ id: string; author_username: string; author_display_name?: string; content: string } | null>(null);
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -266,6 +269,7 @@
     currentView = 'dm';
     messagesLoading = true;
     showGroupSettings = false;
+    replyingTo = null;
     // Clear unread for this channel
     const { [channelId]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
@@ -391,6 +395,7 @@
     activeDmUser = friend.user;
     currentView = 'dm';
     messagesLoading = true;
+    replyingTo = null;
     // Clear unread and unhide for this user
     const { [friend.user.id]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
@@ -419,11 +424,13 @@
   async function sendMessage() {
     if (!messageInput.trim() || !activeDmChannelId || sendingMessage || isRateLimited) return;
     const content = messageInput.trim();
+    const replyId = replyingTo?.id || null;
     messageInput = '';
+    replyingTo = null;
     sendingMessage = true;
 
     try {
-      const msg = await api.post<any>(`/dms/${activeDmChannelId}/messages`, { content });
+      const msg = await api.post<any>(`/dms/${activeDmChannelId}/messages`, { content, reply_to_id: replyId });
       messages = [...messages, msg];
       if (activeDmUser) {
         dmActivity = { ...dmActivity, [activeDmUser.id]: Date.now() };
@@ -578,6 +585,12 @@
   }
 
   function handleMentionKeydown(e: KeyboardEvent) {
+    // Escape cancels reply when mention popup isn't open
+    if (e.key === 'Escape' && replyingTo && !mentionActive) {
+      e.preventDefault();
+      cancelReply();
+      return;
+    }
     const suggestions = mentionSuggestions();
     if (!mentionActive || suggestions.length === 0) return;
     if (e.key === 'Tab' || e.key === 'Enter') {
@@ -629,6 +642,24 @@
       }
     } catch (err: any) {
       console.error('Failed to delete message:', err);
+    }
+  }
+
+  function startReply(msg: any) {
+    replyingTo = { id: msg.id, author_username: msg.author_username, author_display_name: msg.author_display_name, content: msg.content };
+    tick().then(() => messageInputEl?.focus());
+  }
+
+  function cancelReply() {
+    replyingTo = null;
+  }
+
+  function scrollToMessage(messageId: string) {
+    const el = messagesContainer?.querySelector(`[data-msg-id="${messageId}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-accent/10');
+      setTimeout(() => el.classList.remove('bg-accent/10'), 1500);
     }
   }
 
@@ -836,32 +867,60 @@
                   <div class="flex-1 h-px bg-border"></div>
                 </div>
               {:else if !grouped}
-                <div class="relative flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group {i > 0 ? 'mt-4' : ''}">
-                  <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0 mt-0.5">
-                    {msg.author_username.charAt(0).toUpperCase()}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-baseline gap-2">
-                      <span class="text-[15px] font-semibold text-text-primary">{msg.author_display_name || msg.author_username}</span>
-                      <span class="text-[11px] text-text-muted">{formatTime(msg.created_at)}</span>
+                <div class="relative flex flex-col px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group {i > 0 ? 'mt-4' : ''}" data-msg-id={msg.id}>
+                  {#if msg.reply_to_id}
+                    <button class="flex items-center gap-1.5 ml-14 mb-0.5 text-[12px] text-text-muted hover:text-text-secondary transition-colors" onclick={() => scrollToMessage(msg.reply_to_id)}>
+                      <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                      <span class="font-semibold text-text-secondary">{msg.reply_to_author_display_name || msg.reply_to_author_username}</span>
+                      <span class="truncate max-w-[300px]">{msg.reply_to_content ?? 'Original message was deleted'}</span>
+                    </button>
+                  {/if}
+                  <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0 mt-0.5">
+                      {msg.author_username.charAt(0).toUpperCase()}
                     </div>
-                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words mt-0.5">{@html renderContent(msg.content)}</p>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-baseline gap-2">
+                        <span class="text-[15px] font-semibold text-text-primary">{msg.author_display_name || msg.author_username}</span>
+                        <span class="text-[11px] text-text-muted">{formatTime(msg.created_at)}</span>
+                      </div>
+                      <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words mt-0.5">{@html renderContent(msg.content)}</p>
+                    </div>
                   </div>
-                  <button class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
-                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  </button>
+                  <div class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
+                    <button class="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-accent hover:bg-accent/10 transition-all duration-100" onclick={() => startReply(msg)}>
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                    </button>
+                    <button class="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
+                  </div>
                 </div>
               {:else}
-                <div class="relative flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group">
-                  <div class="w-10 flex-shrink-0 flex items-center justify-center">
-                    <span class="text-[10px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity select-none">{new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                <div class="relative flex flex-col px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group" data-msg-id={msg.id}>
+                  {#if msg.reply_to_id}
+                    <button class="flex items-center gap-1.5 ml-14 mb-0.5 text-[12px] text-text-muted hover:text-text-secondary transition-colors" onclick={() => scrollToMessage(msg.reply_to_id)}>
+                      <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                      <span class="font-semibold text-text-secondary">{msg.reply_to_author_display_name || msg.reply_to_author_username}</span>
+                      <span class="truncate max-w-[300px]">{msg.reply_to_content ?? 'Original message was deleted'}</span>
+                    </button>
+                  {/if}
+                  <div class="flex items-start gap-4">
+                    <div class="w-10 flex-shrink-0 flex items-center justify-center">
+                      <span class="text-[10px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity select-none">{new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words">{@html renderContent(msg.content)}</p>
+                    </div>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words">{@html renderContent(msg.content)}</p>
+                  <div class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
+                    <button class="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-accent hover:bg-accent/10 transition-all duration-100" onclick={() => startReply(msg)}>
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                    </button>
+                    <button class="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                    </button>
                   </div>
-                  <button class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
-                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  </button>
                 </div>
               {/if}
             {/each}
@@ -873,6 +932,17 @@
       <div class="px-4 pb-4">
         {#if isRateLimited}
           <div class="text-center text-xs text-warning py-2">Easy there, speedy! You can send again in {rateLimitRemaining}s</div>
+        {/if}
+        {#if replyingTo}
+          <div class="flex items-center gap-2 bg-bg-secondary border border-border border-b-0 rounded-t-lg px-3 py-2">
+            <svg class="w-3.5 h-3.5 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+            <span class="text-xs text-text-muted">Replying to</span>
+            <span class="text-xs font-semibold text-text-primary">{replyingTo.author_display_name || replyingTo.author_username}</span>
+            <span class="text-xs text-text-muted truncate flex-1">{replyingTo.content}</span>
+            <button type="button" class="w-5 h-5 rounded flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors" onclick={cancelReply}>
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
         {/if}
         <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative">
           <!-- Mention autocomplete popup -->
@@ -915,7 +985,7 @@
             onkeydown={handleMentionKeydown}
             disabled={isRateLimited}
             placeholder={isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}
-            class="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors disabled:opacity-50"
+            class="w-full bg-bg-tertiary text-text-primary px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors disabled:opacity-50 {replyingTo ? 'rounded-b-lg' : 'rounded-lg'}"
           />
         </form>
       </div>
