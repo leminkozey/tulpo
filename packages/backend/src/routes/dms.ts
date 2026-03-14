@@ -36,6 +36,95 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: numbe
   return { allowed: true, retryAfterMs: 0 };
 }
 
+// List all DM channels for the current user (for sidebar)
+dms.get("/", async (c) => {
+  const user = c.get("user");
+  const db = getDb();
+
+  const channels = db
+    .query(
+      `SELECT dc.id, dc.name, dc.description, dc.is_group, dc.owner_id, dc.created_at,
+              dp.status as my_status, dp.left_at
+       FROM dm_channels dc
+       JOIN dm_participants dp ON dc.id = dp.dm_channel_id
+       WHERE dp.user_id = ? AND dp.status != 'deleted'
+       ORDER BY dc.created_at DESC`
+    )
+    .all(user.id) as any[];
+
+  // For each channel, get participants
+  const result = channels.map((ch: any) => {
+    const participants = db
+      .query(
+        `SELECT u.id, u.username, u.display_name, u.avatar_url, u.status
+         FROM dm_participants dp
+         JOIN users u ON dp.user_id = u.id
+         WHERE dp.dm_channel_id = ? AND dp.user_id != ?`
+      )
+      .all(ch.id, user.id) as any[];
+
+    return {
+      id: ch.id,
+      name: ch.name,
+      description: ch.description,
+      is_group: !!ch.is_group,
+      owner_id: ch.owner_id,
+      my_status: ch.my_status,
+      left_at: ch.left_at,
+      participants,
+    };
+  });
+
+  return c.json(result);
+});
+
+// Create group DM
+dms.post("/group", async (c) => {
+  const user = c.get("user");
+  const { name, description, user_ids } = await c.req.json();
+
+  if (!name?.trim()) {
+    return c.json({ error: "Group name required" }, 400);
+  }
+
+  if (!Array.isArray(user_ids) || user_ids.length < 1) {
+    return c.json({ error: "At least one other user required" }, 400);
+  }
+
+  const db = getDb();
+
+  const channel = db
+    .query(
+      `INSERT INTO dm_channels (name, description, is_group, owner_id)
+       VALUES (?, ?, 1, ?)
+       RETURNING id`
+    )
+    .get(name.trim(), description?.trim() || null, user.id) as any;
+
+  // Add the creator
+  db.run(
+    "INSERT INTO dm_participants (dm_channel_id, user_id, status) VALUES (?, ?, 'active')",
+    [channel.id, user.id]
+  );
+
+  // Add other users
+  for (const uid of user_ids) {
+    if (uid === user.id) continue;
+    db.run(
+      "INSERT INTO dm_participants (dm_channel_id, user_id, status) VALUES (?, ?, 'active')",
+      [channel.id, uid]
+    );
+    // Notify via WS
+    sendToUser(uid, "GROUP_CREATED", {
+      channel_id: channel.id,
+      name: name.trim(),
+      created_by: user.username,
+    });
+  }
+
+  return c.json({ channel_id: channel.id }, 201);
+});
+
 // Open or get existing DM channel with a user
 dms.post("/open", async (c) => {
   const user = c.get("user");
@@ -84,12 +173,12 @@ dms.get("/:id/messages", async (c) => {
   const channelId = c.req.param("id");
   const db = getDb();
 
-  // Verify user is a participant
+  // Verify user is a participant (active or left, not deleted)
   const participant = db
     .query(
-      "SELECT 1 FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+      "SELECT status, left_at FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status != 'deleted'"
     )
-    .get(channelId, user.id);
+    .get(channelId, user.id) as any;
 
   if (!participant) {
     return c.json({ error: "Not found" }, 404);
@@ -97,6 +186,8 @@ dms.get("/:id/messages", async (c) => {
 
   const before = c.req.query("before");
   const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
+  // If user left the group, only show messages up to left_at
+  const cutoff = participant.left_at;
 
   let rows;
   if (before) {
@@ -108,10 +199,11 @@ dms.get("/:id/messages", async (c) => {
          FROM dm_messages m
          JOIN users u ON m.author_id = u.id
          WHERE m.dm_channel_id = ? AND m.created_at < ?
+         ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
          LIMIT ?`
       )
-      .all(channelId, before, limit) as any[];
+      .all(channelId, before, ...(cutoff ? [cutoff] : []), limit) as any[];
   } else {
     rows = db
       .query(
@@ -121,10 +213,11 @@ dms.get("/:id/messages", async (c) => {
          FROM dm_messages m
          JOIN users u ON m.author_id = u.id
          WHERE m.dm_channel_id = ?
+         ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
          LIMIT ?`
       )
-      .all(channelId, limit) as any[];
+      .all(channelId, ...(cutoff ? [cutoff] : []), limit) as any[];
   }
 
   return c.json(rows.reverse());
@@ -149,14 +242,14 @@ dms.post("/:id/messages", async (c) => {
 
   const db = getDb();
 
-  // Verify user is a participant
+  // Verify user is an active participant
   const participant = db
     .query(
-      "SELECT 1 FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
     )
-    .get(channelId, user.id);
+    .get(channelId, user.id) as any;
 
-  if (!participant) {
+  if (!participant || participant.status !== "active") {
     return c.json({ error: "Not found" }, 404);
   }
 
@@ -180,10 +273,10 @@ dms.post("/:id/messages", async (c) => {
     author_avatar: user.avatar_url,
   };
 
-  // Send to other participant(s) via WS
+  // Send to other active participant(s) via WS
   const participants = db
     .query(
-      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ?"
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'"
     )
     .all(channelId, user.id) as any[];
 
@@ -195,6 +288,92 @@ dms.post("/:id/messages", async (c) => {
   }
 
   return c.json(message, 201);
+});
+
+// Hide a DM from sidebar (just hides, doesn't unfriend or leave)
+dms.post("/:id/hide", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const db = getDb();
+
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  db.run(
+    "UPDATE dm_participants SET status = 'hidden' WHERE dm_channel_id = ? AND user_id = ?",
+    [channelId, user.id]
+  );
+
+  return c.json({ ok: true });
+});
+
+// Leave a group DM (can still see history up to leave point)
+dms.post("/:id/leave", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const db = getDb();
+
+  const channel = db
+    .query("SELECT is_group FROM dm_channels WHERE id = ?")
+    .get(channelId) as any;
+
+  if (!channel?.is_group) {
+    return c.json({ error: "Can only leave group DMs" }, 400);
+  }
+
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant || participant.status !== "active") {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  db.run(
+    `UPDATE dm_participants SET status = 'left', left_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE dm_channel_id = ? AND user_id = ?`,
+    [channelId, user.id]
+  );
+
+  // Notify remaining members
+  const remaining = db
+    .query(
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'"
+    )
+    .all(channelId, user.id) as any[];
+
+  for (const p of remaining) {
+    sendToUser(p.user_id, "GROUP_MEMBER_LEFT", {
+      channel_id: channelId,
+      user_id: user.id,
+      username: user.username,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+// Delete a DM from sidebar (removes completely from view)
+dms.delete("/:id", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const db = getDb();
+
+  db.run(
+    "UPDATE dm_participants SET status = 'deleted' WHERE dm_channel_id = ? AND user_id = ?",
+    [channelId, user.id]
+  );
+
+  return c.json({ ok: true });
 });
 
 export { dms };
