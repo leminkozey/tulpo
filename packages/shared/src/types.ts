@@ -96,3 +96,42 @@ export interface WsHello {
 export interface WsIdentify {
   token: string;
 }
+
+// ===== Friends =====
+export type FriendRequestStatus = "pending" | "accepted" | "blocked";
+
+export interface FriendRequest {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: FriendRequestStatus;
+  note: string | null;
+  created_at: string;
+}
+
+export interface FriendWithUser {
+  id: string;
+  user: PublicUser;
+  note: string | null;
+  created_at: string;
+}
+
+export interface IncomingFriendRequest {
+  id: string;
+  from: PublicUser;
+  note: string | null;
+  created_at: string;
+}
+
+export interface OutgoingFriendRequest {
+  id: string;
+  to: PublicUser;
+  note: string | null;
+  created_at: string;
+}
+
+// ===== User Settings =====
+export interface UserSettings {
+  user_id: string;
+  allow_friend_request_notes: boolean;
+}

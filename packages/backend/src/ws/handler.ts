@@ -31,6 +31,15 @@ function send(ws: TulpoWebSocket, message: WsMessage) {
   ws.send(JSON.stringify(message));
 }
 
+export function sendToUser(userId: string, event: string, data: unknown) {
+  const userConns = connections.get(userId);
+  if (!userConns) return;
+  const message: WsMessage = { op: WsOpCode.DISPATCH, t: event, d: data };
+  for (const ws of userConns) {
+    send(ws, message);
+  }
+}
+
 export const wsHandler = {
   open(ws: TulpoWebSocket) {
     // Send HELLO with heartbeat interval

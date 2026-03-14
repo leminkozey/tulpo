@@ -1,12 +1,13 @@
 import { getDb } from "./index";
 import { migration001 } from "./migrations/001_initial";
+import { migration002 } from "./migrations/002_friends_social";
 
 interface Migration {
   name: string;
   up: (db: ReturnType<typeof getDb>) => void;
 }
 
-const migrations: Migration[] = [migration001];
+const migrations: Migration[] = [migration001, migration002];
 
 function runMigrations() {
   const db = getDb();
