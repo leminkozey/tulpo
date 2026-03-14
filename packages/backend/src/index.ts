@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
-import { getDb } from "@tulpo/db";
+import { getDb, runMigrations } from "@tulpo/db";
 import { env } from "./lib/env";
 import { corsMiddleware } from "./middleware/cors";
 import { health } from "./routes/health";
@@ -11,8 +11,9 @@ import { wsHandler, startHeartbeatChecker } from "./ws/handler";
 import { validateSession } from "./lib/auth";
 import type { WsData } from "./ws/types";
 
-// Initialize database
+// Initialize database + run pending migrations
 getDb();
+runMigrations();
 
 const app = new Hono();
 

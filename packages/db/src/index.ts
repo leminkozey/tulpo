@@ -37,3 +37,5 @@ export function closeDb(): void {
     db = null;
   }
 }
+
+export { runMigrations } from "./migrate";

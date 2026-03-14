@@ -9,7 +9,7 @@ interface Migration {
 
 const migrations: Migration[] = [migration001, migration002];
 
-function runMigrations() {
+export function runMigrations() {
   const db = getDb();
 
   // Create migrations tracking table
@@ -49,4 +49,7 @@ function runMigrations() {
   }
 }
 
-runMigrations();
+// Allow running as standalone script
+if (import.meta.main) {
+  runMigrations();
+}
