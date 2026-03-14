@@ -15,6 +15,27 @@ const dms = new Hono<AuthEnv>();
 
 dms.use("/*", authMiddleware);
 
+// Rate limiter: max 5 messages per 5 seconds per user
+const RATE_LIMIT_WINDOW_MS = 5000;
+const RATE_LIMIT_MAX = 5;
+const messageTimes = new Map<string, number[]>();
+
+function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const times = messageTimes.get(userId) ?? [];
+  const recent = times.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  messageTimes.set(userId, recent);
+
+  if (recent.length >= RATE_LIMIT_MAX) {
+    const oldestInWindow = recent[0];
+    const retryAfterMs = RATE_LIMIT_WINDOW_MS - (now - oldestInWindow);
+    return { allowed: false, retryAfterMs };
+  }
+
+  recent.push(now);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 // Open or get existing DM channel with a user
 dms.post("/open", async (c) => {
   const user = c.get("user");
@@ -117,6 +138,13 @@ dms.post("/:id/messages", async (c) => {
 
   if (!content?.trim()) {
     return c.json({ error: "Message content required" }, 400);
+  }
+
+  // Rate limit check
+  const rateCheck = checkRateLimit(user.id);
+  if (!rateCheck.allowed) {
+    const retryAfter = Math.ceil(rateCheck.retryAfterMs / 1000);
+    return c.json({ error: "Too many messages", retry_after: retryAfter }, 429);
   }
 
   const db = getDb();
