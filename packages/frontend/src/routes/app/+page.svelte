@@ -44,6 +44,138 @@
   let rateLimitTimer: ReturnType<typeof setInterval> | null = null;
   let messagesContainer: HTMLDivElement | undefined = $state();
 
+  // Context menu state
+  let contextMenu = $state<{ x: number; y: number; type: 'friend' | 'group'; friend?: any; channelId?: string; channelName?: string; myStatus?: string } | null>(null);
+
+  // Confirmation dialog
+  let confirmDialog = $state<{ title: string; message: string; onConfirm: () => void; danger?: boolean } | null>(null);
+
+  // New DM / Group popup
+  let showNewDmPopup = $state(false);
+  let selectedForGroup = $state<string[]>([]);
+  let groupName = $state('');
+  let groupDescription = $state('');
+  let groupCreating = $state(false);
+
+  // Group channels from backend
+  let dmChannels = $state<any[]>([]);
+
+  function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
+    e.preventDefault();
+    contextMenu = { x: e.clientX, y: e.clientY, type, ...data };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  async function hideDm(channelId: string) {
+    await api.post(`/dms/${channelId}/hide`);
+    dmChannels = dmChannels.filter(c => c.id !== channelId);
+    closeContextMenu();
+  }
+
+  async function removeFriend(friendId: string) {
+    const friend = friendsStore.friends.find(f => f.id === friendId);
+    if (!friend) return;
+    confirmDialog = {
+      title: 'Remove Friend',
+      message: `Are you sure you want to remove ${friend.user.display_name || friend.user.username} as a friend?`,
+      danger: true,
+      onConfirm: async () => {
+        await friendsStore.removeFriend(friendId);
+        confirmDialog = null;
+        closeContextMenu();
+        if (activeDmUser?.id === friend.user.id) goToFriends();
+      }
+    };
+    closeContextMenu();
+  }
+
+  async function leaveGroup(channelId: string, channelName: string) {
+    confirmDialog = {
+      title: 'Leave Group',
+      message: `Are you sure you want to leave "${channelName}"? You can still see the chat history.`,
+      danger: true,
+      onConfirm: async () => {
+        await api.post(`/dms/${channelId}/leave`);
+        const ch = dmChannels.find(c => c.id === channelId);
+        if (ch) ch.my_status = 'left';
+        dmChannels = [...dmChannels];
+        confirmDialog = null;
+        if (activeDmChannelId === channelId) goToFriends();
+      }
+    };
+    closeContextMenu();
+  }
+
+  async function deleteChannel(channelId: string) {
+    await api.delete(`/dms/${channelId}`);
+    dmChannels = dmChannels.filter(c => c.id !== channelId);
+    closeContextMenu();
+    if (activeDmChannelId === channelId) goToFriends();
+  }
+
+  function toggleGroupMember(userId: string) {
+    if (selectedForGroup.includes(userId)) {
+      selectedForGroup = selectedForGroup.filter(id => id !== userId);
+    } else {
+      selectedForGroup = [...selectedForGroup, userId];
+    }
+  }
+
+  async function createGroup() {
+    if (!groupName.trim() || selectedForGroup.length < 1) return;
+    groupCreating = true;
+    try {
+      const { channel_id } = await api.post<{ channel_id: string }>('/dms/group', {
+        name: groupName.trim(),
+        description: groupDescription.trim() || null,
+        user_ids: selectedForGroup,
+      });
+      showNewDmPopup = false;
+      groupName = '';
+      groupDescription = '';
+      selectedForGroup = [];
+      await loadDmChannels();
+      // Open the new group
+      openGroupDm(channel_id);
+    } catch (err: any) {
+      console.error('Failed to create group:', err);
+    } finally {
+      groupCreating = false;
+    }
+  }
+
+  async function startDmFromPopup(userId: string) {
+    showNewDmPopup = false;
+    const friend = friendsStore.friends.find(f => f.user.id === userId);
+    if (friend) openDm(friend);
+  }
+
+  async function loadDmChannels() {
+    try {
+      dmChannels = await api.get<any[]>('/dms');
+    } catch { /* ignore */ }
+  }
+
+  async function openGroupDm(channelId: string) {
+    const ch = dmChannels.find(c => c.id === channelId);
+    if (!ch) return;
+    activeDmUser = { id: channelId, username: ch.name, display_name: ch.name, is_group: true, status: 'online' };
+    activeDmChannelId = channelId;
+    currentView = 'dm';
+    messagesLoading = true;
+    try {
+      messages = await api.get<any[]>(`/dms/${channelId}/messages`);
+      await scrollToBottom();
+    } catch (err: any) {
+      console.error('Failed to open group DM:', err);
+    } finally {
+      messagesLoading = false;
+    }
+  }
+
   onMount(() => {
     auth.init().then(() => {
       if (!auth.isAuthenticated) {
@@ -53,6 +185,7 @@
 
       wsClient.connect();
       friendsStore.loadAll();
+      loadDmChannels();
 
       unsubs.push(wsClient.on('READY', () => {}));
       unsubs.push(wsClient.on('FRIEND_REQUEST', (data) => {
@@ -251,16 +384,35 @@
     <div class="flex-1 overflow-y-auto px-2">
       <div class="flex items-center justify-between px-2 mb-2 mt-2">
         <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-[0.05em]">Direct Messages</h3>
-        <button aria-label="New DM" onclick={() => { currentView = 'friends'; activeTab = 'add'; }} class="text-text-muted hover:text-text-secondary transition-colors">
+        <button aria-label="New DM" onclick={() => { showNewDmPopup = true; }} class="text-text-muted hover:text-text-secondary transition-colors">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>
       </div>
 
+      <!-- Group DMs -->
+      {#each dmChannels.filter(c => c.is_group) as channel (channel.id)}
+        <button
+          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmChannelId === channel.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
+          onclick={() => openGroupDm(channel.id)}
+          oncontextmenu={(e) => handleContextMenu(e, 'group', { channelId: channel.id, channelName: channel.name, myStatus: channel.my_status })}
+        >
+          <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <span class="text-sm text-text-secondary group-hover:text-text-primary truncate flex-1">{channel.name}</span>
+          {#if channel.my_status === 'left'}
+            <span class="text-[10px] text-text-muted flex-shrink-0">Left</span>
+          {/if}
+        </button>
+      {/each}
+
+      <!-- Friend DMs -->
       {#if sidebarFriends.length > 0}
         {#each sidebarFriends as friend (friend.id)}
           <button
             class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmUser?.id === friend.user.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
             onclick={() => openDm(friend)}
+            oncontextmenu={(e) => handleContextMenu(e, 'friend', { friend: friend })}
           >
             <div class="relative flex-shrink-0">
               <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">
@@ -282,7 +434,7 @@
         {/each}
       {:else if dmSearch.trim()}
         <p class="text-xs text-text-muted px-2">No results</p>
-      {:else if friendsStore.friends.length === 0}
+      {:else if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group).length === 0}
         <p class="text-xs text-text-muted px-2">Add friends to start chatting</p>
       {/if}
     </div>
@@ -510,3 +662,140 @@
     {/if}
   </div>
 </div>
+
+<!-- Context Menu -->
+{#if contextMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-50" onclick={closeContextMenu} oncontextmenu={(e) => { e.preventDefault(); closeContextMenu(); }}>
+    <div
+      class="absolute bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[180px]"
+      style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+      onclick={(e) => e.stopPropagation()}
+    >
+      {#if contextMenu.type === 'friend' && contextMenu.friend}
+        {@const f = contextMenu.friend}
+        <button
+          class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+          onclick={async () => {
+            const channelRes = await api.post<{ channel_id: string }>('/dms/open', { user_id: f.user.id });
+            await hideDm(channelRes.channel_id);
+          }}
+        >Hide from view</button>
+        <div class="h-px bg-border mx-2 my-1"></div>
+        <button
+          class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors"
+          onclick={() => removeFriend(f.id)}
+        >Remove Friend</button>
+      {:else if contextMenu.type === 'group'}
+        {#if contextMenu.myStatus === 'active'}
+          <button
+            class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+            onclick={() => leaveGroup(contextMenu!.channelId!, contextMenu!.channelName!)}
+          >Leave Group</button>
+        {/if}
+        <button
+          class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors"
+          onclick={() => deleteChannel(contextMenu!.channelId!)}
+        >Delete</button>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- Confirmation Dialog -->
+{#if confirmDialog}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={() => confirmDialog = null}>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onclick={(e) => e.stopPropagation()}>
+      <h3 class="text-lg font-semibold text-text-primary mb-2">{confirmDialog.title}</h3>
+      <p class="text-sm text-text-secondary mb-6">{confirmDialog.message}</p>
+      <div class="flex justify-end gap-3">
+        <button
+          class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border"
+          onclick={() => confirmDialog = null}
+        >Cancel</button>
+        <button
+          class="px-4 py-2 text-sm rounded-lg font-medium transition-colors {confirmDialog.danger ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-bg-primary hover:bg-accent-hover'}"
+          onclick={() => confirmDialog?.onConfirm()}
+        >Confirm</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- New DM / Group Popup -->
+{#if showNewDmPopup}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={() => { showNewDmPopup = false; selectedForGroup = []; groupName = ''; groupDescription = ''; }}>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-md w-full mx-4 shadow-xl" onclick={(e) => e.stopPropagation()}>
+      <h3 class="text-lg font-semibold text-text-primary mb-1">New Message</h3>
+      <p class="text-sm text-text-secondary mb-4">Select a friend to DM or multiple to create a group.</p>
+
+      {#if selectedForGroup.length > 1}
+        <!-- Group creation fields -->
+        <div class="mb-4 space-y-2">
+          <input
+            type="text"
+            bind:value={groupName}
+            placeholder="Group name"
+            class="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors"
+          />
+          <input
+            type="text"
+            bind:value={groupDescription}
+            placeholder="Description (optional)"
+            class="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors"
+          />
+        </div>
+      {/if}
+
+      <div class="max-h-60 overflow-y-auto space-y-1 mb-4">
+        {#each friendsStore.friends as friend (friend.id)}
+          <button
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left {selectedForGroup.includes(friend.user.id) ? 'bg-accent/10' : 'hover:bg-bg-hover/50'}"
+            onclick={() => {
+              if (selectedForGroup.length === 0) {
+                // First click — start DM directly unless they pick more
+                toggleGroupMember(friend.user.id);
+              } else {
+                toggleGroupMember(friend.user.id);
+              }
+            }}
+          >
+            <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+              {friend.user.username.charAt(0).toUpperCase()}
+            </div>
+            <span class="text-sm text-text-secondary flex-1">{friend.user.display_name || friend.user.username}</span>
+            {#if selectedForGroup.includes(friend.user.id)}
+              <div class="w-5 h-5 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                <svg class="w-3 h-3 text-bg-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
+            {/if}
+          </button>
+        {/each}
+        {#if friendsStore.friends.length === 0}
+          <p class="text-sm text-text-muted text-center py-4">No friends to message</p>
+        {/if}
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <button
+          class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border"
+          onclick={() => { showNewDmPopup = false; selectedForGroup = []; groupName = ''; groupDescription = ''; }}
+        >Cancel</button>
+        {#if selectedForGroup.length === 1}
+          <button
+            class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors"
+            onclick={() => startDmFromPopup(selectedForGroup[0])}
+          >Open DM</button>
+        {:else if selectedForGroup.length > 1}
+          <button
+            class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors disabled:opacity-50"
+            disabled={!groupName.trim() || groupCreating}
+            onclick={createGroup}
+          >{groupCreating ? 'Creating...' : 'Create Group'}</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
