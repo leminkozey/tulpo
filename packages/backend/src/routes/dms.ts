@@ -653,7 +653,6 @@ dms.delete("/:id/members/:userId", async (c) => {
     .all(channelId) as any[];
 
   for (const p of remaining) {
-    if (p.user_id === user.id) continue;
     sendToUser(p.user_id, "DM_MESSAGE", { channel_id: channelId, message });
   }
 
