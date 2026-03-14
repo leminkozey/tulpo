@@ -1279,7 +1279,7 @@
 {#if deleteMenu}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="fixed inset-0 z-40" onclick={() => deleteMenu = null}></div>
-  <div class="fixed z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[180px]" style="left: {deleteMenu.x}px; top: {deleteMenu.y}px; transform: translateY(-100%);">
+  <div class="fixed z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[180px]" style="right: {window.innerWidth - deleteMenu.x}px; top: {deleteMenu.y}px; transform: translateY(-100%);">
     {#if deleteMenu.canDeleteForEveryone}
       <button class="w-full px-3 py-1.5 text-sm text-danger hover:bg-danger/10 text-left transition-colors flex items-center gap-2" onmousedown={() => { const id = deleteMenu!.messageId; deleteMenu = null; deleteMessage(id, 'everyone'); }}>
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
