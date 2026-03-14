@@ -7,6 +7,39 @@ import { sendToUser } from "../ws/handler";
 import { join } from "path";
 import { mkdir } from "fs/promises";
 
+// Verify file content matches declared MIME type via magic bytes
+function verifyMagicBytes(header: Uint8Array, mimeType: string): boolean {
+  const hex = Array.from(header.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  switch (mimeType) {
+    case 'image/jpeg':
+      return hex.startsWith('ffd8ff');
+    case 'image/png':
+      return hex.startsWith('89504e47');
+    case 'image/gif':
+      return hex.startsWith('47494638');
+    case 'image/webp':
+      return hex.startsWith('52494646') && Array.from(header.slice(8, 12)).map(b => b.toString(16).padStart(2, '0')).join('') === '57454250';
+    case 'application/pdf':
+      return hex.startsWith('25504446');
+    case 'application/zip':
+    case 'application/x-zip-compressed':
+      return hex.startsWith('504b0304') || hex.startsWith('504b0506');
+    case 'video/mp4':
+      // MP4 ftyp box at offset 4
+      return Array.from(header.slice(4, 8)).map(b => b.toString(16).padStart(2, '0')).join('') === '66747970';
+    case 'audio/mpeg':
+      return hex.startsWith('fff') || hex.startsWith('494433'); // MP3 frame sync or ID3 tag
+    case 'audio/ogg':
+      return hex.startsWith('4f676753');
+    case 'text/plain':
+      // Text files have no magic bytes — just ensure it's not a binary with a fake mime
+      return !hex.startsWith('ffd8') && !hex.startsWith('8950') && !hex.startsWith('504b') && !hex.startsWith('7f454c46');
+    default:
+      return false;
+  }
+}
+
 type AuthEnv = {
   Variables: {
     user: PublicUser;
@@ -301,6 +334,13 @@ dms.post("/:id/messages", async (c) => {
     if (file.size > maxSize) {
       const maxMB = Math.round(maxSize / 1024 / 1024);
       return c.json({ error: `File too large (max ${maxMB} MB)` }, 400);
+    }
+
+    // Verify actual file content via magic bytes (don't trust client MIME type alone)
+    const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+    const validMagic = verifyMagicBytes(header, file.type);
+    if (!validMagic) {
+      return c.json({ error: "File content doesn't match declared type" }, 400);
     }
   }
 

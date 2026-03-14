@@ -21,8 +21,26 @@ const app = new Hono();
 // Middleware
 app.use("*", corsMiddleware);
 
-// Serve uploaded files
-app.use("/uploads/*", serveStatic({ root: "./data" }));
+// Serve uploaded files — auth-gated, force download for non-images
+app.use("/uploads/*", async (c, next) => {
+  // Require valid session token
+  const authHeader = c.req.header("Authorization");
+  const token = authHeader?.replace("Bearer ", "") || c.req.query("token");
+  if (!token || !validateSession(token)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  await next();
+
+  // Force download for non-image files (prevents XSS from HTML/SVG)
+  const contentType = c.res.headers.get("content-type") || "";
+  if (!contentType.startsWith("image/")) {
+    c.res.headers.set("Content-Disposition", "attachment");
+  }
+  // Block scripts in all cases
+  c.res.headers.set("X-Content-Type-Options", "nosniff");
+  c.res.headers.set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'none'; script-src 'none'");
+}, serveStatic({ root: "./data" }));
 
 // API routes
 app.route("/api", health);

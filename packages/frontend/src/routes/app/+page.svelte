@@ -499,6 +499,10 @@
     pendingFiles = [];
   }
 
+  function authUrl(url: string): string {
+    return `${url}${url.includes('?') ? '&' : '?'}token=${auth.token}`;
+  }
+
   function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -1074,11 +1078,11 @@
                         <div class="flex flex-wrap gap-2 mt-1.5">
                           {#each msg.attachments as att (att.id)}
                             {#if att.mime_type.startsWith('image/')}
-                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
-                                <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = authUrl(att.url)}>
+                                <img src={authUrl(att.url)} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
                               </button>
                             {:else}
-                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                              <a href={authUrl(att.url)} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
                                 <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
                                   <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                                 </div>
@@ -1143,11 +1147,11 @@
                         <div class="flex flex-wrap gap-2 mt-1.5">
                           {#each msg.attachments as att (att.id)}
                             {#if att.mime_type.startsWith('image/')}
-                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
-                                <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = authUrl(att.url)}>
+                                <img src={authUrl(att.url)} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
                               </button>
                             {:else}
-                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                              <a href={authUrl(att.url)} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
                                 <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
                                   <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                                 </div>
