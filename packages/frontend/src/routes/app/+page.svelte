@@ -376,7 +376,12 @@
       addUsername = '';
       addNote = '';
     } catch (err: any) {
-      addError = err.message || 'Something went wrong';
+      const msg = err.message?.toLowerCase() || '';
+      if (msg.includes('not found') || msg.includes('no user')) addError = "Couldn't find that user. Double-check the username?";
+      else if (msg.includes('already') || msg.includes('pending')) addError = "You've already sent a request to this person!";
+      else if (msg.includes('yourself')) addError = "You can't add yourself, but we appreciate the self-love.";
+      else if (err instanceof TypeError) addError = "Can't reach the server right now. Try again in a sec.";
+      else addError = "Oops! Something didn't work. Try again in a moment.";
     } finally {
       addLoading = false;
     }

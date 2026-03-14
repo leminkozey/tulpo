@@ -13,6 +13,19 @@
     mounted = true;
   });
 
+  function friendlyError(err: unknown): string {
+    if (err instanceof ApiError) {
+      if (err.status === 401) return "Hmm, that doesn't match. Double-check your email and password.";
+      if (err.status === 429) return "Whoa, slow down! Too many attempts. Try again in a minute.";
+      if (err.status === 423) return "Account temporarily locked due to too many failed attempts. Take a breather and try again soon.";
+      if (err.message?.includes('Validation')) return "Something looks off — make sure your email is valid and your password is filled in.";
+    }
+    if (err instanceof TypeError && err.message?.includes('fetch')) {
+      return "Can't reach the server right now. Looks like Tulpo might be taking a nap — try again in a sec.";
+    }
+    return "Oops! Something unexpected happened. Not your fault — try again in a moment.";
+  }
+
   async function handleSubmit(e: Event) {
     e.preventDefault();
     error = '';
@@ -22,11 +35,7 @@
       await auth.login(email, password);
       goto('/app');
     } catch (err) {
-      if (err instanceof ApiError) {
-        error = err.message;
-      } else {
-        error = 'Something went wrong';
-      }
+      error = friendlyError(err);
     } finally {
       submitting = false;
     }
@@ -108,7 +117,10 @@
         </div>
 
         {#if error}
-          <p class="text-xs text-danger">{error}</p>
+          <div class="flex items-start gap-2.5 bg-danger/8 border border-danger/20 rounded-lg px-3.5 py-2.5">
+            <svg class="w-4 h-4 text-danger flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            <p class="text-[13px] text-danger/90 leading-snug">{error}</p>
+          </div>
         {/if}
 
         <button
