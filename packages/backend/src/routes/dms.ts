@@ -4,41 +4,17 @@ import type { PublicUser } from "@tulpo/shared";
 import { ALLOWED_MIME_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { sendToUser } from "../ws/handler";
+import { signUrl } from "../lib/signed-url";
+import { env } from "../lib/env";
+import {
+  verifyMagicBytes,
+  checkFileSafety,
+  processImage,
+  scanWithClamAV,
+  checkUploadRateLimit,
+} from "../lib/upload";
 import { join } from "path";
 import { mkdir } from "fs/promises";
-
-// Verify file content matches declared MIME type via magic bytes
-function verifyMagicBytes(header: Uint8Array, mimeType: string): boolean {
-  const hex = Array.from(header.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join('');
-
-  switch (mimeType) {
-    case 'image/jpeg':
-      return hex.startsWith('ffd8ff');
-    case 'image/png':
-      return hex.startsWith('89504e47');
-    case 'image/gif':
-      return hex.startsWith('47494638');
-    case 'image/webp':
-      return hex.startsWith('52494646') && Array.from(header.slice(8, 12)).map(b => b.toString(16).padStart(2, '0')).join('') === '57454250';
-    case 'application/pdf':
-      return hex.startsWith('25504446');
-    case 'application/zip':
-    case 'application/x-zip-compressed':
-      return hex.startsWith('504b0304') || hex.startsWith('504b0506');
-    case 'video/mp4':
-      // MP4 ftyp box at offset 4
-      return Array.from(header.slice(4, 8)).map(b => b.toString(16).padStart(2, '0')).join('') === '66747970';
-    case 'audio/mpeg':
-      return hex.startsWith('fff') || hex.startsWith('494433'); // MP3 frame sync or ID3 tag
-    case 'audio/ogg':
-      return hex.startsWith('4f676753');
-    case 'text/plain':
-      // Text files have no magic bytes — just ensure it's not a binary with a fake mime
-      return !hex.startsWith('ffd8') && !hex.startsWith('8950') && !hex.startsWith('504b') && !hex.startsWith('7f454c46');
-    default:
-      return false;
-  }
-}
 
 type AuthEnv = {
   Variables: {
@@ -284,7 +260,7 @@ dms.get("/:id/messages", async (c) => {
         filename: att.filename,
         mime_type: att.mime_type,
         size: att.size,
-        url: att.url,
+        url: signUrl(att.url),
       });
     }
 
@@ -326,6 +302,7 @@ dms.post("/:id/messages", async (c) => {
   }
 
   // Validate file if present
+  let fileBuffer: Buffer | null = null;
   if (file) {
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return c.json({ error: "File type not allowed" }, 400);
@@ -336,11 +313,43 @@ dms.post("/:id/messages", async (c) => {
       return c.json({ error: `File too large (max ${maxMB} MB)` }, 400);
     }
 
-    // Verify actual file content via magic bytes (don't trust client MIME type alone)
-    const header = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-    const validMagic = verifyMagicBytes(header, file.type);
-    if (!validMagic) {
+    // Read file into buffer for all checks
+    fileBuffer = Buffer.from(await file.arrayBuffer());
+
+    // Verify actual file content via magic bytes
+    const header = new Uint8Array(fileBuffer.slice(0, 12));
+    if (!verifyMagicBytes(header, file.type)) {
       return c.json({ error: "File content doesn't match declared type" }, 400);
+    }
+
+    // Polyglot / content safety checks
+    const safety = checkFileSafety(new Uint8Array(fileBuffer), file.type);
+    if (!safety.safe) {
+      return c.json({ error: safety.reason || "File rejected" }, 400);
+    }
+
+    // ClamAV virus scan (if configured, fail-closed)
+    const scan = await scanWithClamAV(new Uint8Array(fileBuffer));
+    if (!scan.clean) {
+      console.warn(`Virus detected in upload from ${user.id}: ${scan.virus}`);
+      return c.json({ error: "File rejected by virus scanner" }, 400);
+    }
+
+    // Re-encode images (strip metadata, limit dimensions)
+    if (file.type.startsWith("image/")) {
+      try {
+        fileBuffer = await processImage(fileBuffer, file.type);
+      } catch (err) {
+        console.warn("Image processing failed:", err);
+        return c.json({ error: "Invalid or corrupted image" }, 400);
+      }
+    }
+
+    // Upload rate limit
+    const uploadRate = checkUploadRateLimit(user.id);
+    if (!uploadRate.allowed) {
+      const retryMin = Math.ceil(uploadRate.retryAfterMs / 60_000);
+      return c.json({ error: `Upload limit reached, try again in ${retryMin} min` }, 429);
     }
   }
 
@@ -396,16 +405,39 @@ dms.post("/:id/messages", async (c) => {
 
   // Handle file upload
   let attachments: any[] = [];
-  if (file) {
+  if (file && fileBuffer) {
+    const finalSize = fileBuffer.length;
+
+    // Check storage quota
+    const userRow = db
+      .query("SELECT storage_used FROM users WHERE id = ?")
+      .get(user.id) as any;
+    const storageUsed = userRow?.storage_used ?? 0;
+    if (storageUsed + finalSize > env.uploadQuotaBytes) {
+      const usedMB = Math.round(storageUsed / 1024 / 1024);
+      const quotaMB = Math.round(env.uploadQuotaBytes / 1024 / 1024);
+      return c.json(
+        { error: `Storage quota exceeded (${usedMB}/${quotaMB} MB used)` },
+        413
+      );
+    }
+
     const uploadDir = join("data", "uploads", "dm", channelId);
     await mkdir(uploadDir, { recursive: true });
 
     const ext = file.name.split(".").pop() || "bin";
     const storedFilename = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
     const filePath = join(uploadDir, storedFilename);
-    const url = `/uploads/dm/${channelId}/${storedFilename}`;
+    const rawUrl = `/uploads/dm/${channelId}/${storedFilename}`;
 
-    await Bun.write(filePath, file);
+    // Write processed buffer (re-encoded for images, original for others)
+    await Bun.write(filePath, fileBuffer);
+
+    // Update user storage usage
+    db.run("UPDATE users SET storage_used = storage_used + ? WHERE id = ?", [
+      finalSize,
+      user.id,
+    ]);
 
     const att = db
       .query(
@@ -413,14 +445,14 @@ dms.post("/:id/messages", async (c) => {
          VALUES (?, ?, ?, ?, ?, ?)
          RETURNING id`
       )
-      .get(msg.id, file.name, storedFilename, file.type, file.size, url) as any;
+      .get(msg.id, file.name, storedFilename, file.type, finalSize, rawUrl) as any;
 
     attachments = [{
       id: att.id,
       filename: file.name,
       mime_type: file.type,
-      size: file.size,
-      url,
+      size: finalSize,
+      url: signUrl(rawUrl),
     }];
   }
 

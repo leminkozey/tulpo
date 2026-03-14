@@ -3,6 +3,7 @@ import { serveStatic } from "hono/bun";
 import { getDb, runMigrations } from "@tulpo/db";
 import { env } from "./lib/env";
 import { corsMiddleware } from "./middleware/cors";
+import { rateLimit } from "./middleware/rateLimit";
 import { health } from "./routes/health";
 import { auth } from "./routes/auth";
 import { friends } from "./routes/friends";
@@ -10,6 +11,7 @@ import { settings } from "./routes/settings";
 import { dms } from "./routes/dms";
 import { wsHandler, startHeartbeatChecker } from "./ws/handler";
 import { validateSession } from "./lib/auth";
+import { verifySignedUrl } from "./lib/signed-url";
 import type { WsData } from "./ws/types";
 
 // Initialize database + run pending migrations
@@ -21,13 +23,16 @@ const app = new Hono();
 // Middleware
 app.use("*", corsMiddleware);
 
-// Serve uploaded files — auth-gated, force download for non-images
+// Global API rate limit: 200 requests per minute per IP
+app.use("/api/*", rateLimit({ windowMs: 60_000, maxAttempts: 200 }));
+
+// Serve uploaded files — signed URL verification, force download for non-images
 app.use("/uploads/*", async (c, next) => {
-  // Require valid session token
-  const authHeader = c.req.header("Authorization");
-  const token = authHeader?.replace("Bearer ", "") || c.req.query("token");
-  if (!token || !validateSession(token)) {
-    return c.json({ error: "Unauthorized" }, 401);
+  // Verify HMAC-signed URL (no session token in URLs)
+  const expires = c.req.query("expires");
+  const sig = c.req.query("sig");
+  if (!expires || !sig || !verifySignedUrl(c.req.path, expires, sig)) {
+    return c.json({ error: "Invalid or expired URL" }, 403);
   }
 
   await next();
@@ -40,6 +45,7 @@ app.use("/uploads/*", async (c, next) => {
   // Block scripts in all cases
   c.res.headers.set("X-Content-Type-Options", "nosniff");
   c.res.headers.set("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'none'; script-src 'none'");
+  c.res.headers.set("Cache-Control", "private, max-age=3600");
 }, serveStatic({ root: "./data" }));
 
 // API routes

@@ -5,13 +5,14 @@ import { migration003 } from "./migrations/003_groups";
 import { migration004 } from "./migrations/004_message_deletion";
 import { migration005 } from "./migrations/005_message_replies";
 import { migration006 } from "./migrations/006_dm_attachments";
+import { migration007 } from "./migrations/007_upload_security";
 
 interface Migration {
   name: string;
   up: (db: ReturnType<typeof getDb>) => void;
 }
 
-const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006];
+const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006, migration007];
 
 export function runMigrations() {
   const db = getDb();
