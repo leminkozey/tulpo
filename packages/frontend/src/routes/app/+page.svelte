@@ -499,7 +499,7 @@
     // Escape HTML first
     const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Replace @username with styled span
-    return escaped.replace(/@(\w+)/g, '<span class="text-accent bg-accent/10 rounded px-1 py-px align-baseline">@$1</span>');
+    return escaped.replace(/@(\w+)/g, '<span class="text-accent bg-accent/10 rounded-[4px] px-[3px]" style="padding-top:1px;padding-bottom:2px">@$1</span>');
   }
 
   function handleMentionInput() {
