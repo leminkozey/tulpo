@@ -314,6 +314,32 @@ dms.post("/:id/hide", async (c) => {
   return c.json({ ok: true });
 });
 
+// Unhide a DM (restore to sidebar)
+dms.post("/:id/unhide", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const db = getDb();
+
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  if (participant.status === "hidden") {
+    db.run(
+      "UPDATE dm_participants SET status = 'active' WHERE dm_channel_id = ? AND user_id = ?",
+      [channelId, user.id]
+    );
+  }
+
+  return c.json({ ok: true });
+});
+
 // Leave a group DM (can still see history up to leave point)
 dms.post("/:id/leave", async (c) => {
   const user = c.get("user");

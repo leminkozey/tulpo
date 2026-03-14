@@ -73,6 +73,9 @@
   let showAddMembersPopup = $state(false);
   let addMembersSelected = $state<string[]>([]);
 
+  // Delete group dialog
+  let deleteGroupDialog = $state<{ channelId: string; channelName: string; myStatus: string; alsoLeave: boolean } | null>(null);
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
@@ -507,7 +510,7 @@
       </div>
 
       <!-- Group DMs -->
-      {#each dmChannels.filter(c => c.is_group) as channel (channel.id)}
+      {#each dmChannels.filter(c => c.is_group && c.my_status !== 'hidden') as channel (channel.id)}
         <button
           class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmChannelId === channel.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
           onclick={() => openGroupDm(channel.id)}
@@ -875,11 +878,10 @@
         class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
         onmousedown={() => {
           const id = chId;
+          const name = chName;
+          const status = chStatus;
           closeContextMenu();
-          api.delete(`/dms/${id}`).then(() => {
-            dmChannels = dmChannels.filter(c => c.id !== id);
-            if (activeDmChannelId === id) goToFriends();
-          });
+          deleteGroupDialog = { channelId: id!, channelName: name!, myStatus: status!, alsoLeave: false };
         }}
       >Delete</button>
     {/if}
@@ -974,6 +976,55 @@
   </div>
 {/if}
 
+<!-- Delete Group Dialog -->
+{#if deleteGroupDialog}
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="fixed inset-0" onclick={() => deleteGroupDialog = null}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl relative z-10">
+      <h3 class="text-lg font-semibold text-text-primary mb-2">Delete "{deleteGroupDialog.channelName}"</h3>
+      <p class="text-sm text-text-secondary mb-4">This will remove the group from your Direct Messages.</p>
+
+      {#if deleteGroupDialog.myStatus === 'active'}
+        <label class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 cursor-pointer transition-colors mb-4">
+          <input
+            type="checkbox"
+            checked={deleteGroupDialog.alsoLeave}
+            onchange={() => { deleteGroupDialog = { ...deleteGroupDialog!, alsoLeave: !deleteGroupDialog!.alsoLeave }; }}
+            class="w-4 h-4 rounded accent-danger"
+          />
+          <div>
+            <span class="text-sm text-text-primary">Also leave the group</span>
+            <p class="text-[11px] text-text-muted">You won't receive new messages anymore</p>
+          </div>
+        </label>
+      {/if}
+
+      <div class="flex justify-end gap-3">
+        <button
+          class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border cursor-pointer"
+          onclick={() => deleteGroupDialog = null}
+        >Cancel</button>
+        <button
+          class="px-4 py-2 text-sm rounded-lg font-medium bg-danger text-white hover:bg-danger/80 transition-colors cursor-pointer"
+          onclick={async () => {
+            const { channelId, alsoLeave } = deleteGroupDialog!;
+            if (alsoLeave) {
+              await api.post(`/dms/${channelId}/leave`);
+            }
+            await api.post(`/dms/${channelId}/hide`);
+            const ch = dmChannels.find(c => c.id === channelId);
+            if (ch) ch.my_status = 'hidden';
+            dmChannels = [...dmChannels];
+            if (activeDmChannelId === channelId) goToFriends();
+            deleteGroupDialog = null;
+          }}
+        >Delete</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <!-- Confirmation Dialog -->
 {#if confirmDialog}
   <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
@@ -1023,6 +1074,41 @@
         </div>
       {/if}
 
+      <!-- Hidden groups to restore -->
+      {@const hiddenGroups = dmChannels.filter(c => c.is_group && c.my_status === 'hidden')}
+      {#if hiddenGroups.length > 0}
+        <div class="mb-4">
+          <h4 class="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Hidden Groups</h4>
+          <div class="space-y-1">
+            {#each hiddenGroups as group (group.id)}
+              <button
+                class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-bg-hover/50 transition-colors text-left cursor-pointer"
+                onclick={async () => {
+                  // Unhide: set status back to active/left
+                  const ch = dmChannels.find(c => c.id === group.id);
+                  if (ch) {
+                    try {
+                      await api.post(`/dms/${group.id}/unhide`);
+                    } catch { /* ignore */ }
+                    ch.my_status = 'active';
+                    dmChannels = [...dmChannels];
+                  }
+                  showNewDmPopup = false;
+                  selectedForGroup = [];
+                  openGroupDm(group.id);
+                }}
+              >
+                <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center flex-shrink-0">
+                  <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </div>
+                <span class="text-sm text-text-secondary flex-1">{group.name}</span>
+                <span class="text-[10px] text-accent">Restore</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       <div class="max-h-60 overflow-y-auto space-y-1 mb-4">
         {#each friendsStore.friends as friend (friend.id)}
           <button
@@ -1040,7 +1126,7 @@
             {/if}
           </button>
         {/each}
-        {#if friendsStore.friends.length === 0}
+        {#if friendsStore.friends.length === 0 && hiddenGroups.length === 0}
           <p class="text-sm text-text-muted text-center py-4">No friends to message</p>
         {/if}
       </div>
