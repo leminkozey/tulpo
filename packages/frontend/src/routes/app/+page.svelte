@@ -872,7 +872,7 @@
       <!-- Message input -->
       <div class="px-4 pb-4">
         {#if isRateLimited}
-          <div class="text-center text-xs text-warning py-2">Slow down — you can send again in {rateLimitRemaining}s</div>
+          <div class="text-center text-xs text-warning py-2">Easy there, speedy! You can send again in {rateLimitRemaining}s</div>
         {/if}
         <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative">
           <!-- Mention autocomplete popup -->
@@ -914,7 +914,7 @@
             oninput={handleMentionInput}
             onkeydown={handleMentionKeydown}
             disabled={isRateLimited}
-            placeholder={isRateLimited ? 'Too fast...' : `Message @${activeDmUser.username}`}
+            placeholder={isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}
             class="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors disabled:opacity-50"
           />
         </form>
