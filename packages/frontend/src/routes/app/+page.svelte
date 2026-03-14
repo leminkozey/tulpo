@@ -267,9 +267,12 @@
     activeDmUser = friend.user;
     currentView = 'dm';
     messagesLoading = true;
-    // Clear unread for this user
+    // Clear unread and unhide for this user
     const { [friend.user.id]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
+    if (hiddenUserIds.has(friend.user.id)) {
+      hiddenUserIds = new Set([...hiddenUserIds].filter(id => id !== friend.user.id));
+    }
 
     try {
       const { channel_id } = await api.post<{ channel_id: string }>('/dms/open', { user_id: friend.user.id });
