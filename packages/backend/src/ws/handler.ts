@@ -2,15 +2,22 @@ import { WsOpCode, WS_HEARTBEAT_INTERVAL_MS, WS_HEARTBEAT_TIMEOUT_MS } from "@tu
 import type { WsMessage } from "@tulpo/shared";
 import type { TulpoWebSocket } from "./types";
 import { validateSession } from "../lib/auth";
+import { getDb } from "@tulpo/db";
 
 // Connection pool: userId -> Set of WebSocket connections
 const connections = new Map<string, Set<TulpoWebSocket>>();
 
 export function addConnection(userId: string, ws: TulpoWebSocket) {
+  const isFirstConnection = !connections.has(userId) || connections.get(userId)!.size === 0;
+
   if (!connections.has(userId)) {
     connections.set(userId, new Set());
   }
   connections.get(userId)!.add(ws);
+
+  if (isFirstConnection) {
+    getDb().run("UPDATE users SET status = 'online' WHERE id = ?", [userId]);
+  }
 }
 
 export function removeConnection(userId: string, ws: TulpoWebSocket) {
@@ -19,6 +26,7 @@ export function removeConnection(userId: string, ws: TulpoWebSocket) {
     userConns.delete(ws);
     if (userConns.size === 0) {
       connections.delete(userId);
+      getDb().run("UPDATE users SET status = 'offline' WHERE id = ?", [userId]);
     }
   }
 }
@@ -40,9 +48,31 @@ export function sendToUser(userId: string, event: string, data: unknown) {
   }
 }
 
+export function broadcastToAll(event: string, data: unknown) {
+  const message: WsMessage = { op: WsOpCode.DISPATCH, t: event, d: data };
+  for (const [, sockets] of connections) {
+    for (const ws of sockets) {
+      send(ws, message);
+    }
+  }
+}
+
 export const wsHandler = {
   open(ws: TulpoWebSocket) {
-    // Send HELLO with heartbeat interval
+    // If pre-authenticated via URL token, add to pool and send READY
+    if (ws.data.userId && ws.data.token) {
+      addConnection(ws.data.userId, ws);
+
+      const user = validateSession(ws.data.token);
+      if (user) {
+        send(ws, {
+          op: WsOpCode.DISPATCH,
+          t: "READY",
+          d: { user },
+        });
+      }
+    }
+
     send(ws, {
       op: WsOpCode.HELLO,
       d: { heartbeat_interval: WS_HEARTBEAT_INTERVAL_MS },
@@ -70,11 +100,18 @@ export const wsHandler = {
             return;
           }
 
+          if (ws.data.userId && ws.data.userId !== user.id) {
+            removeConnection(ws.data.userId, ws);
+          }
+
           ws.data.userId = user.id;
           ws.data.isAlive = true;
-          addConnection(user.id, ws);
 
-          // Send READY event
+          const existing = connections.get(user.id);
+          if (!existing || !existing.has(ws)) {
+            addConnection(user.id, ws);
+          }
+
           send(ws, {
             op: WsOpCode.DISPATCH,
             t: "READY",
@@ -95,7 +132,6 @@ export const wsHandler = {
   },
 };
 
-// Heartbeat checker - runs periodically
 export function startHeartbeatChecker() {
   setInterval(() => {
     for (const [userId, sockets] of connections) {

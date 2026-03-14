@@ -9,9 +9,10 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "hono": "^4.7.5",
     "@tulpo/db": "workspace:*",
-    "@tulpo/shared": "workspace:*"
+    "@tulpo/shared": "workspace:*",
+    "discord.js": "^14.25.1",
+    "hono": "^4.7.5"
   },
   "devDependencies": {
     "@types/bun": "^1.2.4"

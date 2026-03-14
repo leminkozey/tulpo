@@ -7,6 +7,7 @@ import { health } from "./routes/health";
 import { auth } from "./routes/auth";
 import { friends } from "./routes/friends";
 import { settings } from "./routes/settings";
+import { dms } from "./routes/dms";
 import { wsHandler, startHeartbeatChecker } from "./ws/handler";
 import { validateSession } from "./lib/auth";
 import type { WsData } from "./ws/types";
@@ -25,6 +26,7 @@ app.route("/api", health);
 app.route("/api/auth", auth);
 app.route("/api/friends", friends);
 app.route("/api/settings", settings);
+app.route("/api/dms", dms);
 
 // Serve static frontend in production
 if (env.isProd) {
@@ -50,7 +52,7 @@ const server = Bun.serve({
       }
 
       const upgraded = server.upgrade(req, {
-        data: { userId, isAlive: true } satisfies WsData,
+        data: { userId, token, isAlive: true } satisfies WsData,
       });
 
       if (upgraded) return undefined;
