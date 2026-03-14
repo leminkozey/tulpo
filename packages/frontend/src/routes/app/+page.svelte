@@ -315,8 +315,9 @@
           messages = [...messages, data.message];
           scrollToBottom();
         } else {
-          // Not in this chat — increment unread by channel_id (groups) or author_id (1:1)
-          const key = channelId || authorId;
+          // Not in this chat — use channel_id for groups, author_id for 1:1 DMs
+          const isGroup = dmChannels.some(c => c.id === channelId && c.is_group);
+          const key = isGroup ? channelId : authorId;
           if (key) {
             unreadCounts = { ...unreadCounts, [key]: (unreadCounts[key] ?? 0) + 1 };
           }
@@ -430,6 +431,26 @@
     messages = [];
   }
 
+  // Unread DM items for server sidebar notification icons
+  let unreadDmItems = $derived(
+    Object.entries(unreadCounts)
+      .filter(([_, count]) => count > 0)
+      .map(([key, count]) => {
+        // Check if it's a group channel
+        const group = dmChannels.find(c => c.id === key && c.is_group);
+        if (group) {
+          return { id: key, type: 'group' as const, name: group.name, initial: group.name?.charAt(0).toUpperCase() ?? 'G', count };
+        }
+        // Check if it's a friend (1:1 DM by user ID)
+        const friend = friendsStore.friends.find(f => f.user.id === key);
+        if (friend) {
+          return { id: key, type: 'friend' as const, name: friend.user.display_name || friend.user.username, initial: friend.user.username.charAt(0).toUpperCase(), count, friend };
+        }
+        return null;
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+  );
+
   // Derived
   let onlineFriends = $derived(
     friendsStore.friends.filter(f => f.user.status === 'online' || f.user.status === 'idle' || f.user.status === 'dnd')
@@ -464,13 +485,40 @@
 
 <div class="flex h-screen bg-bg-primary overflow-hidden">
   <!-- Server Sidebar -->
-  <div class="w-[72px] flex-shrink-0 bg-bg-tertiary flex flex-col items-center py-3 gap-2">
+  <div class="w-[72px] flex-shrink-0 bg-bg-tertiary flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden scrollbar-none">
     <button onclick={goToFriends} aria-label="Home" class="w-12 h-12 rounded-2xl bg-accent/15 hover:bg-accent/25 hover:rounded-xl transition-all duration-200 flex items-center justify-center">
       <svg class="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
     </button>
     <div class="w-8 h-px bg-border my-1"></div>
+
+    <!-- Unread DM notification icons -->
+    {#each unreadDmItems as item (item.id)}
+      <button
+        aria-label="Open {item.name}"
+        class="relative w-12 h-12 rounded-2xl bg-bg-secondary hover:bg-bg-hover hover:rounded-xl transition-all duration-200 flex items-center justify-center group"
+        onclick={() => {
+          if (item.type === 'group') {
+            openGroupDm(item.id);
+          } else if (item.friend) {
+            openDm(item.friend);
+          }
+        }}
+      >
+        {#if item.type === 'group'}
+          <svg class="w-5 h-5 text-text-secondary group-hover:text-text-primary transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        {:else}
+          <span class="text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors">{item.initial}</span>
+        {/if}
+        <span class="absolute -top-1 -right-1 bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{item.count}</span>
+      </button>
+    {/each}
+
+    {#if unreadDmItems.length > 0}
+      <div class="w-8 h-px bg-border my-1"></div>
+    {/if}
+
     <button aria-label="Create server" class="w-12 h-12 rounded-2xl bg-bg-secondary hover:bg-success/15 hover:rounded-xl transition-all duration-200 flex items-center justify-center group">
       <svg class="w-5 h-5 text-success/70 group-hover:text-success transition-colors duration-150" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
     </button>
