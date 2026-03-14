@@ -4,15 +4,16 @@
   --font-sans: "Plus Jakarta Sans", -apple-system, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  --color-bg-primary: #0c0d11;
-  --color-bg-secondary: #14151b;
-  --color-bg-tertiary: #1c1d25;
-  --color-bg-hover: #24252e;
-  --color-bg-active: #2c2d38;
+  --color-bg-primary: #191919;
+  --color-bg-secondary: #1e1e1e;
+  --color-bg-tertiary: #2a2a2a;
+  --color-bg-hover: #333333;
+  --color-bg-active: #3a3a3a;
+  --color-bg-message-hover: #1f1f1f;
 
-  --color-text-primary: #e8e9ef;
-  --color-text-secondary: #8b8d9e;
-  --color-text-muted: #4e5064;
+  --color-text-primary: #ececec;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #666666;
 
   --color-accent: #14b8a6;
   --color-accent-hover: #2dd4bf;
@@ -22,7 +23,7 @@
   --color-success: #22c55e;
   --color-warning: #f59e0b;
 
-  --color-border: #1e1f28;
+  --color-border: #2e2e2e;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -33,18 +34,19 @@
 
 /* CSS Custom Properties for runtime theming */
 :root {
-  --bg-primary: #0c0d11;
-  --bg-secondary: #14151b;
-  --bg-tertiary: #1c1d25;
-  --bg-hover: #24252e;
-  --bg-active: #2c2d38;
-  --text-primary: #e8e9ef;
-  --text-secondary: #8b8d9e;
-  --text-muted: #4e5064;
+  --bg-primary: #191919;
+  --bg-secondary: #1e1e1e;
+  --bg-tertiary: #2a2a2a;
+  --bg-hover: #333333;
+  --bg-active: #3a3a3a;
+  --bg-message-hover: #1f1f1f;
+  --text-primary: #ececec;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
   --accent: #14b8a6;
   --accent-hover: #2dd4bf;
   --accent-muted: rgba(20, 184, 166, 0.1);
-  --border: #1e1f28;
+  --border: #2e2e2e;
   --danger: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
@@ -67,4 +69,19 @@ html, body {
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bg-active);
 }
