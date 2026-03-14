@@ -60,6 +60,9 @@
   // Group channels from backend
   let dmChannels = $state<any[]>([]);
 
+  // Hidden friend IDs (hidden from sidebar)
+  let hiddenUserIds = $state<Set<string>>(new Set());
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
@@ -341,6 +344,7 @@
   let sidebarFriends = $derived(
     friendsStore.friends
       .filter(f => {
+        if (hiddenUserIds.has(f.user.id)) return false;
         if (!dmSearch.trim()) return true;
         const q = dmSearch.toLowerCase();
         return f.user.username.toLowerCase().includes(q) || (f.user.display_name?.toLowerCase().includes(q) ?? false);
@@ -694,9 +698,12 @@
         onmousedown={async () => {
           const uid = friendData.user.id;
           closeContextMenu();
-          const channelRes = await api.post<{ channel_id: string }>('/dms/open', { user_id: uid });
-          await api.post(`/dms/${channelRes.channel_id}/hide`);
-          dmChannels = dmChannels.filter(c => c.id !== channelRes.channel_id);
+          hiddenUserIds = new Set([...hiddenUserIds, uid]);
+          if (activeDmUser?.id === uid) goToFriends();
+          try {
+            const channelRes = await api.post<{ channel_id: string }>('/dms/open', { user_id: uid });
+            await api.post(`/dms/${channelRes.channel_id}/hide`);
+          } catch { /* already hidden locally */ }
         }}
       >Hide from view</button>
       <div class="h-px bg-border mx-2 my-1"></div>
