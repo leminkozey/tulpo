@@ -40,6 +40,8 @@
   let messageInput = $state('');
   let messagesLoading = $state(false);
   let sendingMessage = $state(false);
+  let rateLimitedUntil = $state(0);
+  let rateLimitTimer: ReturnType<typeof setInterval> | null = null;
   let messagesContainer: HTMLDivElement | undefined = $state();
 
   onMount(() => {
@@ -133,8 +135,10 @@
     }
   }
 
+  let isRateLimited = $derived(rateLimitedUntil > Date.now());
+
   async function sendMessage() {
-    if (!messageInput.trim() || !activeDmChannelId || sendingMessage) return;
+    if (!messageInput.trim() || !activeDmChannelId || sendingMessage || isRateLimited) return;
     const content = messageInput.trim();
     messageInput = '';
     sendingMessage = true;
@@ -148,6 +152,17 @@
       await scrollToBottom();
     } catch (err: any) {
       messageInput = content;
+      if (err.status === 429 || err.message?.includes('Too many')) {
+        const retryAfter = err.data?.retry_after ?? 5;
+        rateLimitedUntil = Date.now() + retryAfter * 1000;
+        if (rateLimitTimer) clearInterval(rateLimitTimer);
+        rateLimitTimer = setInterval(() => {
+          if (Date.now() >= rateLimitedUntil) {
+            rateLimitedUntil = 0;
+            if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
+          }
+        }, 500);
+      }
       console.error('Failed to send:', err);
     } finally {
       sendingMessage = false;
@@ -350,12 +365,16 @@
 
       <!-- Message input -->
       <div class="px-4 pb-4">
+        {#if isRateLimited}
+          <div class="text-center text-xs text-warning py-2">Slow down — you can send again shortly.</div>
+        {/if}
         <form onsubmit={(e) => { e.preventDefault(); sendMessage(); }} class="relative">
           <input
             type="text"
             bind:value={messageInput}
-            placeholder="Message @{activeDmUser.username}"
-            class="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors"
+            disabled={isRateLimited}
+            placeholder={isRateLimited ? 'Too fast...' : `Message @${activeDmUser.username}`}
+            class="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors disabled:opacity-50"
           />
         </form>
       </div>

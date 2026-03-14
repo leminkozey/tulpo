@@ -30,7 +30,9 @@ class ApiClient {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new ApiError(res.status, data.error || "Unknown error");
+      const err = new ApiError(res.status, data.error || "Unknown error");
+      err.data = data;
+      throw err;
     }
 
     return data as T;
@@ -62,6 +64,7 @@ class ApiClient {
 }
 
 export class ApiError extends Error {
+  public data: any = null;
   constructor(
     public status: number,
     message: string
