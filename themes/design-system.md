@@ -18,18 +18,19 @@ Das definitive Design-Referenzdokument. Alle Frontend-Komponenten muessen sich d
 ### Backgrounds
 | Token | Hex | Verwendung |
 |-------|-----|------------|
-| `--bg-primary` | `#0c0d11` | App-Hintergrund |
-| `--bg-secondary` | `#14151b` | Cards, Panels, Code Blocks |
-| `--bg-tertiary` | `#1c1d25` | Inputs, erhöhte Flächen |
-| `--bg-hover` | `#24252e` | Hover-States |
-| `--bg-active` | `#2c2d38` | Active/Pressed-States, Inline Code |
+| `--bg-primary` | `#191919` | App-Hintergrund |
+| `--bg-secondary` | `#1e1e1e` | Cards, Panels, Code Blocks |
+| `--bg-tertiary` | `#2a2a2a` | Inputs, erhöhte Flächen |
+| `--bg-hover` | `#333333` | Hover-States |
+| `--bg-active` | `#3a3a3a` | Active/Pressed-States, Inline Code |
+| `--bg-message-hover` | `#1f1f1f` | Chat Message Hover |
 
 ### Text
 | Token | Hex | Verwendung |
 |-------|-----|------------|
-| `--text-primary` | `#e8e9ef` | Headings, wichtiger Text |
-| `--text-secondary` | `#8b8d9e` | Body Text, Beschreibungen |
-| `--text-muted` | `#4e5064` | Timestamps, Captions, Placeholder |
+| `--text-primary` | `#ececec` | Headings, wichtiger Text |
+| `--text-secondary` | `#a0a0a0` | Body Text, Beschreibungen |
+| `--text-muted` | `#666666` | Timestamps, Captions, Placeholder |
 
 ### Accent & Status
 | Token | Hex | Verwendung |
@@ -44,7 +45,7 @@ Das definitive Design-Referenzdokument. Alle Frontend-Komponenten muessen sich d
 ### Borders
 | Token | Hex | Verwendung |
 |-------|-----|------------|
-| `--border` | `#1e1f28` | Standard Borders, Dividers |
+| `--border` | `#2e2e2e` | Standard Borders, Dividers |
 
 ---
 
@@ -81,7 +82,7 @@ Das definitive Design-Referenzdokument. Alle Frontend-Komponenten muessen sich d
 ### Varianten
 | Typ | Background | Text | Border |
 |-----|-----------|------|--------|
-| Primary | `--accent` | `#0c0d11` (dark) | none |
+| Primary | `--accent` | `--bg-primary` | none |
 | Secondary | `--bg-tertiary` | `--text-primary` | 1px `--border` |
 | Ghost | transparent | `--text-secondary` | none |
 | Danger | transparent | `--danger` | 1px `rgba(239,68,68,0.3)` |
