@@ -60,13 +60,22 @@
   // Group channels from backend
   let dmChannels = $state<any[]>([]);
 
+  let contextMenuRef: HTMLDivElement | undefined = $state();
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
+    e.stopPropagation();
     contextMenu = { x: e.clientX, y: e.clientY, type, ...data };
   }
 
   function closeContextMenu() {
     contextMenu = null;
+  }
+
+  function handleWindowClick(e: MouseEvent) {
+    if (contextMenu && contextMenuRef && !contextMenuRef.contains(e.target as Node)) {
+      closeContextMenu();
+    }
   }
 
   async function hideDm(channelId: string) {
@@ -670,58 +679,100 @@
 </div>
 
 <!-- Context Menu -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<svelte:window onclick={handleWindowClick} />
 {#if contextMenu}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 z-50" onclick={closeContextMenu} oncontextmenu={(e) => { e.preventDefault(); closeContextMenu(); }}>
-    <div
-      class="absolute bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[180px]"
-      style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
-      onclick={(e) => e.stopPropagation()}
-    >
-      {#if contextMenu.type === 'friend' && contextMenu.friend}
-        {@const f = contextMenu.friend}
+  <div
+    bind:this={contextMenuRef}
+    class="fixed bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[180px] z-50"
+    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+  >
+    {#if contextMenu.type === 'friend' && contextMenu.friend}
+      {@const friendData = contextMenu.friend}
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer"
+        onmousedown={async () => {
+          const uid = friendData.user.id;
+          closeContextMenu();
+          const channelRes = await api.post<{ channel_id: string }>('/dms/open', { user_id: uid });
+          await api.post(`/dms/${channelRes.channel_id}/hide`);
+          dmChannels = dmChannels.filter(c => c.id !== channelRes.channel_id);
+        }}
+      >Hide from view</button>
+      <div class="h-px bg-border mx-2 my-1"></div>
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+        onmousedown={() => {
+          const fid = friendData.id;
+          const fname = friendData.user.display_name || friendData.user.username;
+          const fUserId = friendData.user.id;
+          closeContextMenu();
+          confirmDialog = {
+            title: 'Remove Friend',
+            message: `Are you sure you want to remove ${fname} as a friend?`,
+            danger: true,
+            onConfirm: async () => {
+              await friendsStore.removeFriend(fid);
+              confirmDialog = null;
+              if (activeDmUser?.id === fUserId) goToFriends();
+            }
+          };
+        }}
+      >Remove Friend</button>
+    {:else if contextMenu.type === 'group'}
+      {@const chId = contextMenu.channelId}
+      {@const chName = contextMenu.channelName}
+      {@const chStatus = contextMenu.myStatus}
+      {#if chStatus === 'active'}
         <button
-          class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-          onclick={async () => {
-            const channelRes = await api.post<{ channel_id: string }>('/dms/open', { user_id: f.user.id });
-            await hideDm(channelRes.channel_id);
+          class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer"
+          onmousedown={() => {
+            closeContextMenu();
+            confirmDialog = {
+              title: 'Leave Group',
+              message: `Are you sure you want to leave "${chName}"? You can still see the chat history.`,
+              danger: true,
+              onConfirm: async () => {
+                await api.post(`/dms/${chId}/leave`);
+                const ch = dmChannels.find(c => c.id === chId);
+                if (ch) ch.my_status = 'left';
+                dmChannels = [...dmChannels];
+                confirmDialog = null;
+                if (activeDmChannelId === chId) goToFriends();
+              }
+            };
           }}
-        >Hide from view</button>
-        <div class="h-px bg-border mx-2 my-1"></div>
-        <button
-          class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors"
-          onclick={() => removeFriend(f.id)}
-        >Remove Friend</button>
-      {:else if contextMenu.type === 'group'}
-        {#if contextMenu.myStatus === 'active'}
-          <button
-            class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
-            onclick={() => leaveGroup(contextMenu!.channelId!, contextMenu!.channelName!)}
-          >Leave Group</button>
-        {/if}
-        <button
-          class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors"
-          onclick={() => deleteChannel(contextMenu!.channelId!)}
-        >Delete</button>
+        >Leave Group</button>
       {/if}
-    </div>
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+        onmousedown={() => {
+          closeContextMenu();
+          api.delete(`/dms/${chId}`).then(() => {
+            dmChannels = dmChannels.filter(c => c.id !== chId);
+            if (activeDmChannelId === chId) goToFriends();
+          });
+        }}
+      >Delete</button>
+    {/if}
   </div>
 {/if}
 
 <!-- Confirmation Dialog -->
 {#if confirmDialog}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={() => confirmDialog = null}>
-    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onclick={(e) => e.stopPropagation()}>
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="fixed inset-0" onclick={() => confirmDialog = null}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl relative z-10">
       <h3 class="text-lg font-semibold text-text-primary mb-2">{confirmDialog.title}</h3>
       <p class="text-sm text-text-secondary mb-6">{confirmDialog.message}</p>
       <div class="flex justify-end gap-3">
         <button
-          class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border"
+          class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border cursor-pointer"
           onclick={() => confirmDialog = null}
         >Cancel</button>
         <button
-          class="px-4 py-2 text-sm rounded-lg font-medium transition-colors {confirmDialog.danger ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-bg-primary hover:bg-accent-hover'}"
+          class="px-4 py-2 text-sm rounded-lg font-medium transition-colors cursor-pointer {confirmDialog.danger ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-bg-primary hover:bg-accent-hover'}"
           onclick={() => confirmDialog?.onConfirm()}
         >Confirm</button>
       </div>
@@ -731,9 +782,10 @@
 
 <!-- New DM / Group Popup -->
 {#if showNewDmPopup}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={() => { showNewDmPopup = false; selectedForGroup = []; groupName = ''; groupDescription = ''; }}>
-    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-md w-full mx-4 shadow-xl" onclick={(e) => e.stopPropagation()}>
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="fixed inset-0" onclick={() => { showNewDmPopup = false; selectedForGroup = []; groupName = ''; groupDescription = ''; }}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-md w-full mx-4 shadow-xl relative z-10">
       <h3 class="text-lg font-semibold text-text-primary mb-1">New Message</h3>
       <p class="text-sm text-text-secondary mb-4">Select a friend to DM or multiple to create a group.</p>
 
@@ -759,14 +811,7 @@
         {#each friendsStore.friends as friend (friend.id)}
           <button
             class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left {selectedForGroup.includes(friend.user.id) ? 'bg-accent/10' : 'hover:bg-bg-hover/50'}"
-            onclick={() => {
-              if (selectedForGroup.length === 0) {
-                // First click — start DM directly unless they pick more
-                toggleGroupMember(friend.user.id);
-              } else {
-                toggleGroupMember(friend.user.id);
-              }
-            }}
+            onclick={() => toggleGroupMember(friend.user.id)}
           >
             <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
               {friend.user.username.charAt(0).toUpperCase()}
