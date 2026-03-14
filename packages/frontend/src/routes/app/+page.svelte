@@ -92,6 +92,14 @@
   // Reply state
   let replyingTo = $state<{ id: string; author_username: string; author_display_name?: string; content: string } | null>(null);
 
+  // Edit state
+  let editingMessageId = $state<string | null>(null);
+  let editContent = $state('');
+
+  // Typing indicator state
+  let typingUsers = $state<Map<string, { username: string; timeout: ReturnType<typeof setTimeout> }>>(new Map());
+  let lastTypingSent = $state(0);
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -270,6 +278,9 @@
     messagesLoading = true;
     showGroupSettings = false;
     replyingTo = null;
+    editingMessageId = null;
+    for (const t of typingUsers.values()) clearTimeout(t.timeout);
+    typingUsers = new Map();
     // Clear unread for this channel
     const { [channelId]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
@@ -332,6 +343,13 @@
         const channelId = data.channel_id;
         if (authorId) {
           dmActivity = { ...dmActivity, [authorId]: Date.now() };
+          // Clear typing indicator when user sends a message
+          if (typingUsers.has(authorId)) {
+            const entry = typingUsers.get(authorId)!;
+            clearTimeout(entry.timeout);
+            typingUsers.delete(authorId);
+            typingUsers = new Map(typingUsers);
+          }
         }
         if (channelId === activeDmChannelId) {
           messages = [...messages, data.message];
@@ -353,6 +371,28 @@
               : m
           );
         }
+      }));
+      unsubs.push(wsClient.on('DM_MESSAGE_EDITED', (data: any) => {
+        if (data.channel_id === activeDmChannelId) {
+          // If we're editing this message, cancel
+          if (editingMessageId === data.message_id) cancelEdit();
+          messages = messages.map(m =>
+            m.id === data.message_id
+              ? { ...m, content: data.content, edited_at: data.edited_at }
+              : m
+          );
+        }
+      }));
+      unsubs.push(wsClient.on('TYPING_START', (data: any) => {
+        if (data.channel_id !== activeDmChannelId) return;
+        const existing = typingUsers.get(data.user_id);
+        if (existing?.timeout) clearTimeout(existing.timeout);
+        const timeout = setTimeout(() => {
+          typingUsers.delete(data.user_id);
+          typingUsers = new Map(typingUsers);
+        }, 5000);
+        typingUsers.set(data.user_id, { username: data.username, timeout });
+        typingUsers = new Map(typingUsers);
       }));
     });
   });
@@ -396,6 +436,9 @@
     currentView = 'dm';
     messagesLoading = true;
     replyingTo = null;
+    editingMessageId = null;
+    for (const t of typingUsers.values()) clearTimeout(t.timeout);
+    typingUsers = new Map();
     // Clear unread and unhide for this user
     const { [friend.user.id]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
@@ -427,6 +470,9 @@
     const replyId = replyingTo?.id || null;
     messageInput = '';
     replyingTo = null;
+    editingMessageId = null;
+    for (const t of typingUsers.values()) clearTimeout(t.timeout);
+    typingUsers = new Map();
     sendingMessage = true;
 
     try {
@@ -652,7 +698,55 @@
 
   function cancelReply() {
     replyingTo = null;
+    editingMessageId = null;
+    for (const t of typingUsers.values()) clearTimeout(t.timeout);
+    typingUsers = new Map();
   }
+
+  function canEdit(msg: any): boolean {
+    if (msg.author_id !== auth.user?.id) return false;
+    if (msg.content?.startsWith('[system]') || msg.is_system) return false;
+    if (msg.deleted_at) return false;
+    return Date.now() - new Date(msg.created_at).getTime() < 20 * 60 * 1000;
+  }
+
+  function startEdit(msg: any) {
+    editingMessageId = msg.id;
+    editContent = msg.content;
+  }
+
+  function cancelEdit() {
+    editingMessageId = null;
+    editContent = '';
+  }
+
+  async function saveEdit() {
+    if (!editingMessageId || !editContent.trim() || !activeDmChannelId) return;
+    const msgId = editingMessageId;
+    const newContent = editContent.trim();
+    cancelEdit();
+    try {
+      const result = await api.patch<{ ok: boolean; edited_at: string }>(
+        `/dms/${activeDmChannelId}/messages/${msgId}`,
+        { content: newContent }
+      );
+      messages = messages.map(m =>
+        m.id === msgId ? { ...m, content: newContent, edited_at: result.edited_at } : m
+      );
+    } catch (err: any) {
+      console.error('Failed to edit message:', err);
+    }
+  }
+
+  function sendTypingStart() {
+    if (!activeDmChannelId) return;
+    const now = Date.now();
+    if (now - lastTypingSent < 3000) return;
+    lastTypingSent = now;
+    wsClient.sendEvent('TYPING_START', { channel_id: activeDmChannelId });
+  }
+
+  let typingUsersList = $derived(Array.from(typingUsers.values()));
 
   function scrollToMessage(messageId: string) {
     const el = messagesContainer?.querySelector(`[data-msg-id="${messageId}"]`);
@@ -878,7 +972,7 @@
                     </button>
                   {/if}
                   <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-full bg-bg-tertiary flex items-center justify-center text-[13px] font-bold text-text-secondary flex-shrink-0">
+                    <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-[13px] font-bold text-accent flex-shrink-0">
                       {msg.author_username.charAt(0).toUpperCase()}
                     </div>
                     <div class="flex-1 min-w-0 pt-0.5">
@@ -886,7 +980,20 @@
                         <span class="text-[15px] font-semibold text-text-primary leading-none">{msg.author_display_name || msg.author_username}</span>
                         <span class="text-[11px] text-text-muted/60 leading-none">{formatTime(msg.created_at)}</span>
                       </div>
-                      <p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}</p>
+                      {#if editingMessageId === msg.id}
+                        <div class="mt-1">
+                          <input
+                            type="text"
+                            bind:value={editContent}
+                            class="w-full bg-bg-primary text-[15px] text-text-secondary leading-[1.4] px-3 py-1.5 rounded-md border border-accent/40 focus:border-accent focus:outline-none"
+                            onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); } }}
+                            autofocus
+                          />
+                          <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
+                        </div>
+                      {:else}
+                        <p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                      {/if}
                     </div>
                   </div>
                   <!-- Action toolbar -->
@@ -894,6 +1001,12 @@
                     <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
+                    {#if canEdit(msg)}
+                      <div class="w-px h-4 bg-border"></div>
+                      <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startEdit(msg)}>
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                    {/if}
                     <div class="w-px h-4 bg-border"></div>
                     <button class="px-2 py-1.5 text-text-muted hover:text-danger hover:bg-danger/8 rounded-r-md transition-colors duration-75" onclick={(e) => openDeleteMenu(e, msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -915,7 +1028,20 @@
                       <span class="text-[10px] text-text-muted/50 opacity-0 group-hover:opacity-100 transition-opacity select-none tabular-nums">{new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}</p>
+                      {#if editingMessageId === msg.id}
+                        <div>
+                          <input
+                            type="text"
+                            bind:value={editContent}
+                            class="w-full bg-bg-primary text-[15px] text-text-secondary leading-[1.4] px-3 py-1.5 rounded-md border border-accent/40 focus:border-accent focus:outline-none"
+                            onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); } }}
+                            autofocus
+                          />
+                          <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
+                        </div>
+                      {:else}
+                        <p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                      {/if}
                     </div>
                   </div>
                   <!-- Action toolbar -->
@@ -923,6 +1049,12 @@
                     <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
+                    {#if canEdit(msg)}
+                      <div class="w-px h-4 bg-border"></div>
+                      <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startEdit(msg)}>
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                      </button>
+                    {/if}
                     <div class="w-px h-4 bg-border"></div>
                     <button class="px-2 py-1.5 text-text-muted hover:text-danger hover:bg-danger/8 rounded-r-md transition-colors duration-75" onclick={(e) => openDeleteMenu(e, msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -936,12 +1068,37 @@
       </div>
 
       <!-- Message input -->
-      <div class="px-4 pb-4">
+      <div class="px-4 pb-4 relative">
+        <!-- Typing indicator — avatars peeking above input, bottom 40% hidden behind it -->
+        {#if typingUsersList.length > 0}
+          <div class="flex items-end gap-3 pl-3 -mb-5 relative" style="z-index: 1">
+            <div class="flex items-end -space-x-5">
+              {#each typingUsersList.slice(0, 5) as typer, i (typer.username)}
+                <div
+                  class="w-12 h-12 rounded-full bg-[#1c3f3b] border-[3px] border-bg-primary flex items-center justify-center text-[16px] font-bold text-accent relative"
+                  style="z-index: {5 - i}; animation: typing-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) {i * 0.1}s both"
+                >
+                  {typer.username.charAt(0).toUpperCase()}
+                </div>
+              {/each}
+              {#if typingUsersList.length > 5}
+                <div class="w-12 h-12 rounded-full bg-[#162e2b] border-[3px] border-bg-primary flex items-center justify-center text-[13px] font-bold text-accent relative" style="z-index: 0; animation: typing-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s both">
+                  +{typingUsersList.length - 5}
+                </div>
+              {/if}
+            </div>
+            <div class="flex items-center gap-[3px] pb-6">
+              <span class="w-[7px] h-[7px] rounded-full bg-accent" style="animation: typing-bounce 1.2s ease-in-out infinite"></span>
+              <span class="w-[7px] h-[7px] rounded-full bg-accent" style="animation: typing-bounce 1.2s ease-in-out 0.2s infinite"></span>
+              <span class="w-[7px] h-[7px] rounded-full bg-accent" style="animation: typing-bounce 1.2s ease-in-out 0.4s infinite"></span>
+            </div>
+          </div>
+        {/if}
         {#if isRateLimited}
-          <div class="text-center text-xs text-warning/80 py-2 tracking-wide">Easy there, speedy! You can send again in {rateLimitRemaining}s</div>
+          <div class="relative z-10 text-center text-xs text-warning/80 py-2 tracking-wide">Easy there, speedy! You can send again in {rateLimitRemaining}s</div>
         {/if}
         {#if replyingTo}
-          <div class="flex items-center gap-2.5 bg-bg-tertiary border-l-[3px] border-l-accent border-t border-r border-t-border border-r-border rounded-t-lg px-3.5 py-2.5">
+          <div class="relative z-10 flex items-center gap-2.5 bg-bg-tertiary border-l-[3px] border-l-accent border-t border-r border-t-border border-r-border rounded-t-lg px-3.5 py-2.5">
             <svg class="w-4 h-4 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
             <span class="text-[12px] text-text-muted">Replying to</span>
             <span class="text-[12px] font-semibold text-accent">{replyingTo.author_display_name || replyingTo.author_username}</span>
@@ -951,7 +1108,7 @@
             </button>
           </div>
         {/if}
-        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative">
+        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative z-10">
           <!-- Mention autocomplete popup -->
           {#if mentionActive && mentionSuggestions().length > 0}
             <div class="absolute bottom-full mb-1 left-0 w-72 bg-bg-secondary border border-border rounded-lg shadow-xl overflow-hidden z-20">
@@ -972,7 +1129,7 @@
                     <span class="text-sm text-warning font-medium truncate">@everyone</span>
                     <span class="text-xs text-text-muted truncate ml-auto">Notify all</span>
                   {:else}
-                    <div class="w-7 h-7 rounded-full bg-bg-tertiary flex items-center justify-center text-[11px] font-bold text-text-secondary flex-shrink-0">
+                    <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-[11px] font-bold text-accent flex-shrink-0">
                       {user.username.charAt(0).toUpperCase()}
                     </div>
                     <span class="text-sm text-text-primary truncate">{user.display_name || user.username}</span>
@@ -988,7 +1145,7 @@
             type="text"
             bind:value={messageInput}
             bind:this={messageInputEl}
-            oninput={handleMentionInput}
+            oninput={() => { handleMentionInput(); sendTypingStart(); }}
             onkeydown={handleMentionKeydown}
             disabled={isRateLimited}
             placeholder={isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}

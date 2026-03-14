@@ -136,6 +136,10 @@ function createWsClient() {
     };
   }
 
+  function sendEvent(event: string, data: unknown) {
+    send({ op: WsOpCode.CLIENT_EVENT, t: event, d: data });
+  }
+
   return {
     get status() {
       return status;
@@ -144,6 +148,7 @@ function createWsClient() {
     disconnect,
     on,
     send,
+    sendEvent,
   };
 }
 

@@ -91,6 +91,37 @@ export const wsHandler = {
           send(ws, { op: WsOpCode.HEARTBEAT_ACK, d: null });
           break;
 
+        case WsOpCode.CLIENT_EVENT: {
+          if (!ws.data.userId) break;
+          const payload = data.d as any;
+          const eventType = data.t;
+
+          if (eventType === "TYPING_START" && payload?.channel_id) {
+            const db = getDb();
+            const participant = db
+              .query("SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'")
+              .get(payload.channel_id, ws.data.userId) as any;
+            if (!participant) break;
+
+            const user = db
+              .query("SELECT username, avatar_url FROM users WHERE id = ?")
+              .get(ws.data.userId) as any;
+
+            const others = db
+              .query("SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'")
+              .all(payload.channel_id, ws.data.userId) as any[];
+
+            for (const p of others) {
+              sendToUser(p.user_id, "TYPING_START", {
+                channel_id: payload.channel_id,
+                user_id: ws.data.userId,
+                username: user?.username,
+              });
+            }
+          }
+          break;
+        }
+
         case WsOpCode.IDENTIFY: {
           const { token } = data.d as { token: string };
           const user = validateSession(token);

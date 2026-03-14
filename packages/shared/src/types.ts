@@ -80,6 +80,7 @@ export enum WsOpCode {
   HEARTBEAT = 1,
   HEARTBEAT_ACK = 2,
   IDENTIFY = 3,
+  CLIENT_EVENT = 4,
   DISPATCH = 10,
 }
 

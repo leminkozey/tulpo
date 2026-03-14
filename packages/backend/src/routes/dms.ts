@@ -735,6 +735,72 @@ dms.get("/:id/info", async (c) => {
   });
 });
 
+// Edit a message (own messages, < 20 min)
+dms.patch("/:id/messages/:messageId", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const messageId = c.req.param("messageId");
+  const { content } = await c.req.json();
+  const db = getDb();
+
+  if (!content?.trim()) {
+    return c.json({ error: "Message content required" }, 400);
+  }
+
+  const participant = db
+    .query("SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?")
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const msg = db
+    .query("SELECT id, author_id, content, created_at, deleted_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?")
+    .get(messageId, channelId) as any;
+
+  if (!msg) {
+    return c.json({ error: "Message not found" }, 404);
+  }
+
+  if (msg.author_id !== user.id) {
+    return c.json({ error: "Can only edit own messages" }, 403);
+  }
+
+  if (msg.deleted_at || msg.content.startsWith("[system]")) {
+    return c.json({ error: "Cannot edit this message" }, 400);
+  }
+
+  const ageMs = Date.now() - new Date(msg.created_at).getTime();
+  if (ageMs >= 20 * 60 * 1000) {
+    return c.json({ error: "Message too old to edit" }, 403);
+  }
+
+  db.run(
+    `UPDATE dm_messages SET content = ?, edited_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+    [content.trim(), messageId]
+  );
+
+  const updated = db
+    .query("SELECT edited_at FROM dm_messages WHERE id = ?")
+    .get(messageId) as any;
+
+  const participants = db
+    .query("SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'")
+    .all(channelId, user.id) as any[];
+
+  for (const p of participants) {
+    sendToUser(p.user_id, "DM_MESSAGE_EDITED", {
+      channel_id: channelId,
+      message_id: messageId,
+      content: content.trim(),
+      edited_at: updated.edited_at,
+    });
+  }
+
+  return c.json({ ok: true, edited_at: updated.edited_at });
+});
+
 // Delete a message (for everyone or just for me)
 dms.delete("/:id/messages/:messageId", async (c) => {
   const user = c.get("user");
