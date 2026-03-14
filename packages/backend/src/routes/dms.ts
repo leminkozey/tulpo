@@ -1,8 +1,11 @@
 import { Hono } from "hono";
 import { getDb } from "@tulpo/db";
 import type { PublicUser } from "@tulpo/shared";
+import { ALLOWED_MIME_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { sendToUser } from "../ws/handler";
+import { join } from "path";
+import { mkdir } from "fs/promises";
 
 type AuthEnv = {
   Variables: {
@@ -225,17 +228,80 @@ dms.get("/:id/messages", async (c) => {
       .all(user.id, channelId, ...(cutoff ? [cutoff] : []), limit) as any[];
   }
 
-  return c.json(rows.reverse());
+  const messages = rows.reverse();
+
+  // Batch-fetch attachments for all messages
+  if (messages.length > 0) {
+    const messageIds = messages.map((m: any) => m.id);
+    const placeholders = messageIds.map(() => "?").join(",");
+    const attachments = db
+      .query(
+        `SELECT id, dm_message_id, filename, mime_type, size, url
+         FROM dm_attachments WHERE dm_message_id IN (${placeholders})`
+      )
+      .all(...messageIds) as any[];
+
+    const attachmentMap = new Map<string, any[]>();
+    for (const att of attachments) {
+      if (!attachmentMap.has(att.dm_message_id)) {
+        attachmentMap.set(att.dm_message_id, []);
+      }
+      attachmentMap.get(att.dm_message_id)!.push({
+        id: att.id,
+        filename: att.filename,
+        mime_type: att.mime_type,
+        size: att.size,
+        url: att.url,
+      });
+    }
+
+    for (const msg of messages) {
+      (msg as any).attachments = attachmentMap.get(msg.id) || [];
+    }
+  }
+
+  return c.json(messages);
 });
 
-// Send a message in a DM channel
+// Send a message in a DM channel (JSON or multipart with file)
 dms.post("/:id/messages", async (c) => {
   const user = c.get("user");
   const channelId = c.req.param("id");
-  const { content, reply_to_id } = await c.req.json();
 
-  if (!content?.trim()) {
-    return c.json({ error: "Message content required" }, 400);
+  let content: string | null = null;
+  let reply_to_id: string | null = null;
+  let file: File | null = null;
+
+  const contentType = c.req.header("content-type") || "";
+  if (contentType.includes("multipart/form-data")) {
+    const body = await c.req.parseBody();
+    content = (body["content"] as string) || null;
+    reply_to_id = (body["reply_to_id"] as string) || null;
+    const uploaded = body["file"];
+    if (uploaded instanceof File) {
+      file = uploaded;
+    }
+  } else {
+    const json = await c.req.json();
+    content = json.content || null;
+    reply_to_id = json.reply_to_id || null;
+  }
+
+  // Must have content or file
+  if (!content?.trim() && !file) {
+    return c.json({ error: "Message content or file required" }, 400);
+  }
+
+  // Validate file if present
+  if (file) {
+    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+      return c.json({ error: "File type not allowed" }, 400);
+    }
+    const maxSize = file.type.startsWith("image/") ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+    if (file.size > maxSize) {
+      const maxMB = Math.round(maxSize / 1024 / 1024);
+      return c.json({ error: `File too large (max ${maxMB} MB)` }, 400);
+    }
   }
 
   // Rate limit check
@@ -286,11 +352,41 @@ dms.post("/:id/messages", async (c) => {
        VALUES (?, ?, ?, ?)
        RETURNING id, created_at`
     )
-    .get(channelId, user.id, content.trim(), reply_to_id || null) as any;
+    .get(channelId, user.id, content?.trim() || "", reply_to_id || null) as any;
+
+  // Handle file upload
+  let attachments: any[] = [];
+  if (file) {
+    const uploadDir = join("data", "uploads", "dm", channelId);
+    await mkdir(uploadDir, { recursive: true });
+
+    const ext = file.name.split(".").pop() || "bin";
+    const storedFilename = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    const filePath = join(uploadDir, storedFilename);
+    const url = `/uploads/dm/${channelId}/${storedFilename}`;
+
+    await Bun.write(filePath, file);
+
+    const att = db
+      .query(
+        `INSERT INTO dm_attachments (dm_message_id, filename, stored_filename, mime_type, size, url)
+         VALUES (?, ?, ?, ?, ?, ?)
+         RETURNING id`
+      )
+      .get(msg.id, file.name, storedFilename, file.type, file.size, url) as any;
+
+    attachments = [{
+      id: att.id,
+      filename: file.name,
+      mime_type: file.type,
+      size: file.size,
+      url,
+    }];
+  }
 
   const message = {
     id: msg.id,
-    content: content.trim(),
+    content: content?.trim() || "",
     created_at: msg.created_at,
     edited_at: null,
     author_id: user.id,
@@ -301,6 +397,7 @@ dms.post("/:id/messages", async (c) => {
     reply_to_content: replyData?.reply_to_content || null,
     reply_to_author_username: replyData?.reply_to_author_username || null,
     reply_to_author_display_name: replyData?.reply_to_author_display_name || null,
+    attachments,
   };
 
   // Send to other active participant(s) via WS

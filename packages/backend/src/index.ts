@@ -21,6 +21,9 @@ const app = new Hono();
 // Middleware
 app.use("*", corsMiddleware);
 
+// Serve uploaded files
+app.use("/uploads/*", serveStatic({ root: "./data" }));
+
 // API routes
 app.route("/api", health);
 app.route("/api/auth", auth);

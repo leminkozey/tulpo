@@ -100,6 +100,13 @@
   let typingUsers = $state<Map<string, { username: string; timeout: ReturnType<typeof setTimeout> }>>(new Map());
   let lastTypingSent = $state(0);
 
+  // File upload state
+  let pendingFiles = $state<{ file: File; previewUrl: string; isImage: boolean }[]>([]);
+  let uploading = $state(false);
+  let dragOver = $state(false);
+  let fileInputEl: HTMLInputElement;
+  let lightboxUrl = $state<string | null>(null);
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -464,26 +471,80 @@
   let rateLimitRemaining = $state(0);
   let isRateLimited = $derived(rateLimitRemaining > 0);
 
+  function addFiles(fileList: FileList | File[]) {
+    const maxImageSize = 10 * 1024 * 1024;
+    const maxFileSize = 25 * 1024 * 1024;
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'application/zip', 'application/x-zip-compressed', 'video/mp4', 'audio/mpeg', 'audio/ogg'];
+
+    for (const file of fileList) {
+      if (!allowed.includes(file.type)) continue;
+      const max = file.type.startsWith('image/') ? maxImageSize : maxFileSize;
+      if (file.size > max) continue;
+      const isImage = file.type.startsWith('image/');
+      const previewUrl = isImage ? URL.createObjectURL(file) : '';
+      pendingFiles = [...pendingFiles, { file, previewUrl, isImage }];
+    }
+  }
+
+  function removeFile(index: number) {
+    const removed = pendingFiles[index];
+    if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+    pendingFiles = pendingFiles.filter((_, i) => i !== index);
+  }
+
+  function clearPendingFiles() {
+    for (const f of pendingFiles) {
+      if (f.previewUrl) URL.revokeObjectURL(f.previewUrl);
+    }
+    pendingFiles = [];
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   async function sendMessage() {
-    if (!messageInput.trim() || !activeDmChannelId || sendingMessage || isRateLimited) return;
+    const hasContent = messageInput.trim().length > 0;
+    const hasFiles = pendingFiles.length > 0;
+    if ((!hasContent && !hasFiles) || !activeDmChannelId || sendingMessage || isRateLimited) return;
+
     const content = messageInput.trim();
     const replyId = replyingTo?.id || null;
+    const filesToSend = [...pendingFiles];
     messageInput = '';
     replyingTo = null;
     editingMessageId = null;
     for (const t of typingUsers.values()) clearTimeout(t.timeout);
     typingUsers = new Map();
+    clearPendingFiles();
     sendingMessage = true;
+    uploading = hasFiles;
 
     try {
-      const msg = await api.post<any>(`/dms/${activeDmChannelId}/messages`, { content, reply_to_id: replyId });
-      messages = [...messages, msg];
+      if (hasFiles) {
+        // Send first file with text content
+        for (let i = 0; i < filesToSend.length; i++) {
+          const fd = new FormData();
+          fd.append('file', filesToSend[i].file);
+          if (i === 0) {
+            if (content) fd.append('content', content);
+            if (replyId) fd.append('reply_to_id', replyId);
+          }
+          const msg = await api.upload<any>(`/dms/${activeDmChannelId}/messages`, fd);
+          messages = [...messages, msg];
+        }
+      } else {
+        const msg = await api.post<any>(`/dms/${activeDmChannelId}/messages`, { content, reply_to_id: replyId });
+        messages = [...messages, msg];
+      }
       if (activeDmUser) {
         dmActivity = { ...dmActivity, [activeDmUser.id]: Date.now() };
       }
       await scrollToBottom();
     } catch (err: any) {
-      messageInput = content;
+      if (!hasFiles) messageInput = content;
       if (err.status === 429 || err.message?.includes('Too many')) {
         const retryAfter = err.data?.retry_after ?? 5;
         rateLimitRemaining = retryAfter;
@@ -499,6 +560,7 @@
       console.error('Failed to send:', err);
     } finally {
       sendingMessage = false;
+      uploading = false;
     }
   }
 
@@ -932,7 +994,21 @@
       </div>
 
       <!-- Messages -->
-      <div class="flex-1 overflow-y-auto px-4 py-4" bind:this={messagesContainer}>
+      <div
+        class="flex-1 overflow-y-auto px-4 py-4 relative"
+        bind:this={messagesContainer}
+        ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+        ondragleave={(e) => { if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) dragOver = false; }}
+        ondrop={(e) => { e.preventDefault(); dragOver = false; if (e.dataTransfer?.files.length) addFiles(e.dataTransfer.files); }}
+      >
+        {#if dragOver}
+          <div class="absolute inset-0 z-30 bg-accent/8 border-2 border-dashed border-accent/40 rounded-xl flex items-center justify-center pointer-events-none">
+            <div class="text-center">
+              <svg class="w-10 h-10 text-accent mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <p class="text-sm font-medium text-accent">Drop files to upload</p>
+            </div>
+          </div>
+        {/if}
         {#if messagesLoading}
           <div class="flex items-center justify-center h-full">
             <p class="text-text-muted text-sm">Loading messages...</p>
@@ -992,7 +1068,28 @@
                           <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
                         </div>
                       {:else}
-                        <p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                        {#if msg.content}<p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>{/if}
+                      {/if}
+                      {#if msg.attachments?.length > 0}
+                        <div class="flex flex-wrap gap-2 mt-1.5">
+                          {#each msg.attachments as att (att.id)}
+                            {#if att.mime_type.startsWith('image/')}
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
+                                <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
+                              </button>
+                            {:else}
+                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                                <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
+                                  <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                </div>
+                                <div class="min-w-0">
+                                  <p class="text-[13px] text-accent truncate group-hover/file:underline">{att.filename}</p>
+                                  <p class="text-[11px] text-text-muted">{formatFileSize(att.size)}</p>
+                                </div>
+                              </a>
+                            {/if}
+                          {/each}
+                        </div>
                       {/if}
                     </div>
                   </div>
@@ -1040,7 +1137,28 @@
                           <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
                         </div>
                       {:else}
-                        <p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                        {#if msg.content}<p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>{/if}
+                      {/if}
+                      {#if msg.attachments?.length > 0}
+                        <div class="flex flex-wrap gap-2 mt-1.5">
+                          {#each msg.attachments as att (att.id)}
+                            {#if att.mime_type.startsWith('image/')}
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
+                                <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
+                              </button>
+                            {:else}
+                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                                <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
+                                  <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                </div>
+                                <div class="min-w-0">
+                                  <p class="text-[13px] text-accent truncate group-hover/file:underline">{att.filename}</p>
+                                  <p class="text-[11px] text-text-muted">{formatFileSize(att.size)}</p>
+                                </div>
+                              </a>
+                            {/if}
+                          {/each}
+                        </div>
                       {/if}
                     </div>
                   </div>
@@ -1108,6 +1226,26 @@
             </button>
           </div>
         {/if}
+        <!-- File preview bar -->
+        {#if pendingFiles.length > 0}
+          <div class="relative z-10 flex items-center gap-2 bg-bg-tertiary border border-border {replyingTo ? 'border-t-0' : 'rounded-t-xl'} px-3 py-2.5 overflow-x-auto">
+            {#each pendingFiles as pf, i (pf.file.name + i)}
+              <div class="relative flex-shrink-0 group/preview">
+                {#if pf.isImage}
+                  <img src={pf.previewUrl} alt={pf.file.name} class="w-16 h-16 rounded-md object-cover border border-border/50" />
+                {:else}
+                  <div class="w-16 h-16 rounded-md bg-bg-primary border border-border/50 flex flex-col items-center justify-center gap-1">
+                    <svg class="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                    <span class="text-[8px] text-text-muted truncate max-w-[56px] px-1">{pf.file.name.split('.').pop()}</span>
+                  </div>
+                {/if}
+                <button type="button" class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity" onclick={() => removeFile(i)}>
+                  <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
+          </div>
+        {/if}
         <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative z-10">
           <!-- Mention autocomplete popup -->
           {#if mentionActive && mentionSuggestions().length > 0}
@@ -1141,16 +1279,34 @@
               {/each}
             </div>
           {/if}
-          <input
-            type="text"
-            bind:value={messageInput}
-            bind:this={messageInputEl}
-            oninput={() => { handleMentionInput(); sendTypingStart(); }}
-            onkeydown={handleMentionKeydown}
-            disabled={isRateLimited}
-            placeholder={isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}
-            class="w-full bg-bg-tertiary text-text-primary px-4 py-3 text-[14px] border border-border focus:border-accent/50 focus:outline-none focus:shadow-[0_0_0_1px_rgba(20,184,166,0.15)] placeholder:text-text-muted/60 transition-all duration-150 disabled:opacity-40 {replyingTo ? 'rounded-b-xl border-t-0 border-l-[3px] border-l-accent' : 'rounded-xl'}"
-          />
+          <div class="flex items-center gap-0 {replyingTo || pendingFiles.length > 0 ? 'rounded-b-xl border-t-0' : 'rounded-xl'} bg-bg-tertiary border border-border focus-within:border-accent/50 focus-within:shadow-[0_0_0_1px_rgba(20,184,166,0.15)] transition-all duration-150 {replyingTo && pendingFiles.length === 0 ? 'border-l-[3px] border-l-accent' : ''}">
+            <button type="button" class="flex-shrink-0 px-3 py-3 text-text-muted hover:text-accent transition-colors" onclick={() => fileInputEl?.click()}>
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+            </button>
+            <input
+              type="text"
+              bind:value={messageInput}
+              bind:this={messageInputEl}
+              oninput={() => { handleMentionInput(); sendTypingStart(); }}
+              onkeydown={handleMentionKeydown}
+              onpaste={(e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                const files: File[] = [];
+                for (const item of items) {
+                  if (item.kind === 'file') {
+                    const f = item.getAsFile();
+                    if (f) files.push(f);
+                  }
+                }
+                if (files.length > 0) { e.preventDefault(); addFiles(files); }
+              }}
+              disabled={isRateLimited || uploading}
+              placeholder={uploading ? 'Uploading...' : isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}
+              class="flex-1 min-w-0 bg-transparent text-text-primary py-3 pr-3 text-[14px] focus:outline-none placeholder:text-text-muted/60 disabled:opacity-40"
+            />
+          </div>
+          <input type="file" multiple class="hidden" bind:this={fileInputEl} onchange={(e) => { const t = e.target as HTMLInputElement; if (t.files) { addFiles(t.files); t.value = ''; } }} />
         </form>
       </div>
     {:else}
@@ -1649,5 +1805,12 @@
         {/if}
       </div>
     </div>
+  </div>
+{/if}
+
+<!-- Image lightbox -->
+{#if lightboxUrl}
+  <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center cursor-zoom-out" onclick={() => lightboxUrl = null} onkeydown={(e) => { if (e.key === 'Escape') lightboxUrl = null; }} role="button" tabindex="-1">
+    <img src={lightboxUrl} alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
   </div>
 {/if}

@@ -61,6 +61,28 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  async upload<T>(path: string, formData: FormData): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (this.token) {
+      headers["Authorization"] = `Bearer ${this.token}`;
+    }
+    // No Content-Type — browser sets multipart boundary automatically
+    const res = await fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (res.status === 204) return undefined as T;
+    const data = await res.json();
+    if (!res.ok) {
+      const err = new ApiError(res.status, data.error || "Unknown error");
+      err.data = data;
+      throw err;
+    }
+    return data as T;
+  }
 }
 
 export class ApiError extends Error {

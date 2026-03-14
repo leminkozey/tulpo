@@ -136,3 +136,12 @@ export interface UserSettings {
   user_id: string;
   allow_friend_request_notes: boolean;
 }
+
+// ===== Attachments =====
+export interface DmAttachment {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size: number;
+  url: string;
+}
