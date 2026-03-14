@@ -1011,11 +1011,14 @@
             const { channelId, alsoLeave } = deleteGroupDialog!;
             if (alsoLeave) {
               await api.post(`/dms/${channelId}/leave`);
+              await api.delete(`/dms/${channelId}`);
+              dmChannels = dmChannels.filter(c => c.id !== channelId);
+            } else {
+              await api.post(`/dms/${channelId}/hide`);
+              const ch = dmChannels.find(c => c.id === channelId);
+              if (ch) ch.my_status = 'hidden';
+              dmChannels = [...dmChannels];
             }
-            await api.post(`/dms/${channelId}/hide`);
-            const ch = dmChannels.find(c => c.id === channelId);
-            if (ch) ch.my_status = 'hidden';
-            dmChannels = [...dmChannels];
             if (activeDmChannelId === channelId) goToFriends();
             deleteGroupDialog = null;
           }}
