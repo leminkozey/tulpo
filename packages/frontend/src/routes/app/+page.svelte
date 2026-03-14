@@ -470,11 +470,15 @@
   let mentionSuggestions = $derived(() => {
     if (!mentionActive) return [];
     const q = mentionQuery.toLowerCase();
-    const users = activeDmUser?.is_group
+    const isGroup = activeDmUser?.is_group;
+    const users: { id: string; username: string; display_name?: string }[] = isGroup
       ? chatParticipants.filter(p => p.id !== auth.user?.id)
       : activeDmUser ? [{ id: activeDmUser.id, username: activeDmUser.username, display_name: activeDmUser.display_name }] : [];
-    if (!q) return users.slice(0, 8);
-    return users.filter(u =>
+    // Add @everyone for groups
+    const everyone = isGroup ? [{ id: '__everyone__', username: 'everyone', display_name: 'Notify all members' }] : [];
+    const all = [...everyone, ...users];
+    if (!q) return all.slice(0, 8);
+    return all.filter(u =>
       u.username.toLowerCase().includes(q) || (u.display_name?.toLowerCase().includes(q) ?? false)
     ).slice(0, 8);
   });
@@ -495,11 +499,32 @@
       .toSorted((a, b) => (dmActivity[b.user.id] ?? 0) - (dmActivity[a.user.id] ?? 0))
   );
 
+  const mentionColors = [
+    { text: '#2dd4bf', bg: 'rgba(45,212,191,0.1)' },  // teal
+    { text: '#a78bfa', bg: 'rgba(167,139,250,0.1)' },  // purple
+    { text: '#fb923c', bg: 'rgba(251,146,60,0.1)' },   // orange
+    { text: '#f472b6', bg: 'rgba(244,114,182,0.1)' },  // pink
+    { text: '#4ade80', bg: 'rgba(74,222,128,0.1)' },   // green
+    { text: '#60a5fa', bg: 'rgba(96,165,250,0.1)' },   // blue
+    { text: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },   // yellow
+    { text: '#f87171', bg: 'rgba(248,113,113,0.1)' },  // red
+  ];
+
+  function getMentionColor(name: string) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+    return mentionColors[Math.abs(hash) % mentionColors.length];
+  }
+
   function renderContent(content: string): string {
-    // Escape HTML first
     const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    // Replace @username with styled span
-    return escaped.replace(/@(\w+)/g, '<span class="text-accent bg-accent/10 rounded-[4px] px-[3px]" style="padding:0 3px 2px">@$1</span>');
+    return escaped.replace(/@(\w+)/g, (_, name) => {
+      if (name === 'everyone') {
+        return `<span style="color:#fbbf24;background:rgba(251,191,36,0.12)" class="rounded px-1">@everyone</span>`;
+      }
+      const c = getMentionColor(name);
+      return `<span style="color:${c.text};background:${c.bg}" class="rounded px-1">@${name}</span>`;
+    });
   }
 
   function handleMentionInput() {
@@ -803,12 +828,20 @@
                   onmousedown={(e) => { e.preventDefault(); insertMention(user.username); }}
                   onmouseenter={() => mentionIndex = i}
                 >
-                  <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent flex-shrink-0">
-                    {user.username.charAt(0).toUpperCase()}
-                  </div>
-                  <span class="text-sm text-text-primary truncate">{user.display_name || user.username}</span>
-                  {#if user.display_name && user.display_name !== user.username}
-                    <span class="text-xs text-text-muted truncate">{user.username}</span>
+                  {#if user.id === '__everyone__'}
+                    <div class="w-6 h-6 rounded-full bg-warning/15 flex items-center justify-center flex-shrink-0">
+                      <svg class="w-3.5 h-3.5 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    </div>
+                    <span class="text-sm text-warning truncate">@everyone</span>
+                    <span class="text-xs text-text-muted truncate">Notify all</span>
+                  {:else}
+                    <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent flex-shrink-0">
+                      {user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <span class="text-sm text-text-primary truncate">{user.display_name || user.username}</span>
+                    {#if user.display_name && user.display_name !== user.username}
+                      <span class="text-xs text-text-muted truncate">{user.username}</span>
+                    {/if}
                   {/if}
                 </button>
               {/each}
