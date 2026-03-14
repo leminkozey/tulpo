@@ -114,7 +114,7 @@
         <button
           type="submit"
           disabled={submitting}
-          class="mt-1 bg-accent text-[#0c0d11] font-semibold py-2.5 px-5 rounded-[10px] text-sm transition-all duration-150 hover:-translate-y-px hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+          class="mt-1 bg-accent text-bg-primary font-semibold py-2.5 px-5 rounded-[10px] text-sm transition-all duration-150 hover:-translate-y-px hover:bg-accent-hover active:translate-y-px disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
         >
           {submitting ? 'Signing in...' : 'Sign in'}
         </button>
