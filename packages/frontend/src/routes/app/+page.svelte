@@ -135,7 +135,8 @@
     }
   }
 
-  let isRateLimited = $derived(rateLimitedUntil > Date.now());
+  let rateLimitRemaining = $state(0);
+  let isRateLimited = $derived(rateLimitRemaining > 0);
 
   async function sendMessage() {
     if (!messageInput.trim() || !activeDmChannelId || sendingMessage || isRateLimited) return;
@@ -154,14 +155,15 @@
       messageInput = content;
       if (err.status === 429 || err.message?.includes('Too many')) {
         const retryAfter = err.data?.retry_after ?? 5;
-        rateLimitedUntil = Date.now() + retryAfter * 1000;
+        rateLimitRemaining = retryAfter;
         if (rateLimitTimer) clearInterval(rateLimitTimer);
         rateLimitTimer = setInterval(() => {
-          if (Date.now() >= rateLimitedUntil) {
-            rateLimitedUntil = 0;
+          rateLimitRemaining--;
+          if (rateLimitRemaining <= 0) {
+            rateLimitRemaining = 0;
             if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
           }
-        }, 500);
+        }, 1000);
       }
       console.error('Failed to send:', err);
     } finally {
@@ -366,7 +368,7 @@
       <!-- Message input -->
       <div class="px-4 pb-4">
         {#if isRateLimited}
-          <div class="text-center text-xs text-warning py-2">Slow down — you can send again shortly.</div>
+          <div class="text-center text-xs text-warning py-2">Slow down — you can send again in {rateLimitRemaining}s</div>
         {/if}
         <form onsubmit={(e) => { e.preventDefault(); sendMessage(); }} class="relative">
           <input
