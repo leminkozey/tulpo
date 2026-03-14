@@ -200,6 +200,12 @@
       unsubs.push(wsClient.on('FRIEND_REQUEST_CANCELLED', (data) => {
         friendsStore.handleFriendRequestCancelled(data);
       }));
+      unsubs.push(wsClient.on('GROUP_CREATED', (_data: any) => {
+        loadDmChannels();
+      }));
+      unsubs.push(wsClient.on('GROUP_MEMBER_LEFT', (_data: any) => {
+        loadDmChannels();
+      }));
       unsubs.push(wsClient.on('DM_MESSAGE', (data: any) => {
         const authorId = data.message?.author_id;
         if (authorId) {
