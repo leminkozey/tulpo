@@ -1,0 +1,61 @@
+const BASE = "/api";
+
+class ApiClient {
+  private token: string | null = null;
+
+  setToken(token: string | null) {
+    this.token = token;
+  }
+
+  private async request<T>(
+    path: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options.headers as Record<string, string>),
+    };
+
+    if (this.token) {
+      headers["Authorization"] = `Bearer ${this.token}`;
+    }
+
+    const res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers,
+    });
+
+    if (res.status === 204) return undefined as T;
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new ApiError(res.status, data.error || "Unknown error");
+    }
+
+    return data as T;
+  }
+
+  get<T>(path: string) {
+    return this.request<T>(path);
+  }
+
+  post<T>(path: string, body?: unknown) {
+    return this.request<T>(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export const api = new ApiClient();

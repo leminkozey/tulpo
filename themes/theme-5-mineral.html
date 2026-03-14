@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Theme 5 — Mineral</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #0c0d11;
+    --bg-secondary: #14151b;
+    --bg-tertiary: #1c1d25;
+    --bg-hover: #24252e;
+    --bg-active: #2c2d38;
+    --text-primary: #e8e9ef;
+    --text-secondary: #8b8d9e;
+    --text-muted: #4e5064;
+    --accent: #14b8a6;
+    --accent-hover: #2dd4bf;
+    --accent-muted: rgba(20, 184, 166, 0.1);
+    --border: #1e1f28;
+    --danger: #f43f5e;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  .theme-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 700;
+  }
+
+  h1 { font-size: 32px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.8px; }
+  h2 { font-size: 22px; font-weight: 700; margin-top: 40px; margin-bottom: 16px; letter-spacing: -0.3px; }
+  h3 { font-size: 14px; font-weight: 700; margin-bottom: 10px; color: var(--text-secondary); }
+  p { color: var(--text-secondary); margin-bottom: 16px; font-size: 15px; }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; font-weight: 500; }
+
+  .section { margin-bottom: 48px; }
+
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .btn {
+    padding: 10px 22px;
+    border-radius: var(--radius-md);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.18s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0c0d11;
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(20, 184, 166, 0.3);
+  }
+  .btn-primary:active { transform: translateY(0); box-shadow: none; }
+
+  .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-muted);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    color: var(--accent);
+    background: var(--accent-muted);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+  }
+  .btn-danger:hover {
+    background: rgba(244, 63, 94, 0.08);
+    border-color: var(--danger);
+  }
+
+  .btn-sm { padding: 7px 16px; font-size: 13px; border-radius: var(--radius-sm); }
+  .btn-lg { padding: 14px 30px; font-size: 16px; font-weight: 700; border-radius: var(--radius-lg); }
+
+  /* Chat — Clean, spacious */
+  .chat { display: flex; flex-direction: column; gap: 4px; }
+
+  .message {
+    display: flex; gap: 12px; padding: 10px 14px;
+    border-radius: var(--radius-md);
+    transition: background 0.12s ease;
+  }
+  .message:hover { background: var(--bg-secondary); }
+
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--accent-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 15px; color: var(--accent);
+    flex-shrink: 0;
+    border: 2px solid rgba(20, 184, 166, 0.15);
+  }
+
+  .msg-content { flex: 1; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .msg-author { font-weight: 700; font-size: 14px; }
+  .msg-time { font-size: 11px; color: var(--text-muted); }
+  .msg-text { font-size: 14.5px; color: var(--text-secondary); line-height: 1.55; }
+  .msg-text code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg-tertiary);
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-size: 13px;
+    color: var(--accent-hover);
+  }
+
+  .code-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin: 8px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .code-block .keyword { color: #f472b6; }
+  .code-block .string { color: var(--accent-hover); }
+  .code-block .comment { color: var(--text-muted); font-style: italic; }
+
+  .input-area {
+    background: var(--bg-secondary);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    max-width: 600px;
+    transition: all 0.15s ease;
+    outline: none;
+  }
+  .input-area:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-muted);
+  }
+  .input-area::placeholder { color: var(--text-muted); }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    transition: all 0.18s ease;
+  }
+  .card:hover {
+    border-color: rgba(20, 184, 166, 0.2);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(20, 184, 166, 0.05);
+    transform: translateY(-2px);
+  }
+  .card-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  .tag {
+    display: inline-flex; align-items: center;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tag-accent { background: var(--accent-muted); color: var(--accent-hover); }
+  .tag-success { background: rgba(34, 197, 94, 0.1); color: #4ade80; }
+  .tag-warning { background: rgba(245, 158, 11, 0.1); color: #fbbf24; }
+  .tag-danger { background: rgba(244, 63, 94, 0.1); color: #fb7185; }
+  .tag-row { display: flex; gap: 8px; margin-bottom: 16px; }
+
+  .toggle-track {
+    width: 46px; height: 24px;
+    background: var(--bg-active);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .toggle-track.active { background: var(--accent); }
+  .toggle-thumb {
+    width: 18px; height: 18px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .toggle-track.active .toggle-thumb { transform: translateX(22px); }
+
+  .color-grid { display: grid; grid-template-columns: repeat(auto-fill, 80px); gap: 12px; }
+  .color-swatch {
+    width: 80px; height: 60px; border-radius: var(--radius-md);
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 6px; font-size: 10px; color: rgba(255,255,255,0.7);
+  }
+</style>
+</head>
+<body>
+
+<div class="theme-label">Theme 5</div>
+<h1>Mineral</h1>
+<p class="subtitle">Plus Jakarta Sans / Teal Accent / Deep Blue-Black / Smooth / Modern Startup Feel</p>
+
+<div class="section">
+  <h2>Farben</h2>
+  <div class="color-grid">
+    <div class="color-swatch" style="background: #0c0d11">Primary</div>
+    <div class="color-swatch" style="background: #14151b">Secondary</div>
+    <div class="color-swatch" style="background: #1c1d25">Tertiary</div>
+    <div class="color-swatch" style="background: #14b8a6">Accent</div>
+    <div class="color-swatch" style="background: #2dd4bf">Accent H</div>
+    <div class="color-swatch" style="background: #f43f5e">Danger</div>
+    <div class="color-swatch" style="background: #22c55e">Success</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Typography</h2>
+  <h1>Heading 1 — The quick brown fox</h1>
+  <h2>Heading 2 — The quick brown fox</h2>
+  <h3>Heading 3 — The quick brown fox</h3>
+  <p>Body text — Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore.</p>
+  <p style="font-size: 12px; color: var(--text-muted)">Caption text — Smaller, muted, timestamps and metadata</p>
+  <div class="code-block">
+    <span class="comment">// Mineral style code</span><br>
+    <span class="keyword">const</span> server = <span class="keyword">await</span> createServer({<br>
+    &nbsp;&nbsp;name: <span class="string">"My Server"</span>,<br>
+    &nbsp;&nbsp;icon: <span class="string">"mineral.png"</span><br>
+    });
+  </div>
+</div>
+
+<div class="section">
+  <h2>Buttons</h2>
+  <div class="btn-row">
+    <button class="btn btn-primary">Primary</button>
+    <button class="btn btn-secondary">Secondary</button>
+    <button class="btn btn-ghost">Ghost</button>
+    <button class="btn btn-danger">Danger</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary btn-sm">Small</button>
+    <button class="btn btn-primary">Medium</button>
+    <button class="btn btn-primary btn-lg">Large</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Tags</h2>
+  <div class="tag-row">
+    <span class="tag tag-accent">Online</span>
+    <span class="tag tag-success">Connected</span>
+    <span class="tag tag-warning">Idle</span>
+    <span class="tag tag-danger">Do Not Disturb</span>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Input</h2>
+  <input class="input-area" placeholder="Nachricht an #general schreiben..." />
+</div>
+
+<div class="section">
+  <h2>Chat Messages</h2>
+  <div class="chat">
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #2dd4bf">Manu</span>
+          <span class="msg-time">Heute um 14:32</span>
+        </div>
+        <div class="msg-text">Hey, hat jemand den neuen Voice Channel getestet? Die Latenz ist krass niedrig.</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar" style="background: rgba(34,197,94,0.1); color: #22c55e; border-color: rgba(34,197,94,0.15)">A</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #4ade80">Alex</span>
+          <span class="msg-time">Heute um 14:33</span>
+        </div>
+        <div class="msg-text">Ja! Fühlt sich besser an als Discord. Hast du <code>noise suppression</code> aktiviert?</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #2dd4bf">Manu</span>
+          <span class="msg-time">Heute um 14:34</span>
+        </div>
+        <div class="msg-text">Klar, hier der Config:</div>
+        <div class="code-block">
+          <span class="keyword">const</span> voiceConfig = {<br>
+          &nbsp;&nbsp;noiseSuppression: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;echoCancellation: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;sampleRate: <span class="string">48000</span><br>
+          };
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Cards</h2>
+  <div class="card-row">
+    <div class="card">
+      <h3>Server Info</h3>
+      <p style="font-size: 13px">12 Members online</p>
+      <div class="tag-row" style="margin-top: 10px">
+        <span class="tag tag-accent">Gaming</span>
+        <span class="tag tag-success">Active</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Voice Channel</h3>
+      <p style="font-size: 13px">3 connected</p>
+      <button class="btn btn-primary btn-sm" style="margin-top: 8px">Join</button>
+    </div>
+    <div class="card">
+      <h3>Settings</h3>
+      <p style="font-size: 13px">Notifications</p>
+      <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px">
+        <div class="toggle-track active"><div class="toggle-thumb"></div></div>
+        <span style="font-size: 13px">Push</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

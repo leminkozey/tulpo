@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Theme 2 — Ember</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  @font-face {
+    font-family: 'Geist';
+    src: local('Geist');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #111110;
+    --bg-secondary: #1c1c1a;
+    --bg-tertiary: #262624;
+    --bg-hover: #2e2e2b;
+    --bg-active: #363633;
+    --text-primary: #eeeeec;
+    --text-secondary: #a0a09b;
+    --text-muted: #63635e;
+    --accent: #f97316;
+    --accent-hover: #fb923c;
+    --accent-muted: rgba(249, 115, 22, 0.12);
+    --border: #2a2a28;
+    --danger: #dc2626;
+    --success: #16a34a;
+    --warning: #eab308;
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  body {
+    font-family: 'Geist', 'Inter', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  .theme-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  h1 { font-size: 30px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.8px; }
+  h2 { font-size: 20px; font-weight: 600; margin-top: 40px; margin-bottom: 16px; letter-spacing: -0.5px; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+  p { color: var(--text-secondary); margin-bottom: 16px; font-size: 14px; }
+  .subtitle { font-size: 15px; color: var(--text-secondary); margin-bottom: 40px; }
+
+  .section { margin-bottom: 48px; }
+
+  /* Buttons — Sharp, minimal */
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .btn {
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    font-family: 'Geist', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.1s ease;
+    letter-spacing: 0.2px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);
+  }
+  .btn-primary:active { opacity: 0.8; }
+
+  .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    background: var(--bg-hover);
+    border-color: var(--text-muted);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
+
+  .btn-danger {
+    background: var(--danger);
+    color: white;
+  }
+  .btn-danger:hover {
+    opacity: 0.9;
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.3);
+  }
+
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .btn-lg { padding: 12px 24px; font-size: 15px; }
+
+  /* Chat — Compact, no-nonsense */
+  .chat { display: flex; flex-direction: column; gap: 2px; }
+
+  .message {
+    display: flex; gap: 10px; padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    transition: background 0.08s ease;
+    border-left: 2px solid transparent;
+  }
+  .message:hover {
+    background: var(--bg-secondary);
+    border-left-color: var(--accent);
+  }
+
+  .avatar {
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    background: var(--accent-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 14px; color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .msg-content { flex: 1; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 1px; }
+  .msg-author { font-weight: 600; font-size: 13px; }
+  .msg-time { font-size: 11px; color: var(--text-muted); font-family: 'Geist Mono', monospace; }
+  .msg-text { font-size: 14px; color: var(--text-secondary); line-height: 1.5; }
+  .msg-text code {
+    font-family: 'Geist Mono', monospace;
+    background: var(--bg-active);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12.5px;
+    color: var(--accent-hover);
+  }
+
+  .code-block {
+    background: #0d0d0c;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin: 6px 0;
+    font-family: 'Geist Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--text-primary);
+  }
+  .code-block .keyword { color: #f97316; }
+  .code-block .string { color: #a3e635; }
+  .code-block .comment { color: var(--text-muted); }
+  .code-block .func { color: #fbbf24; }
+
+  .input-area {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    color: var(--text-primary);
+    font-family: 'Geist', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    max-width: 600px;
+    transition: border-color 0.1s ease;
+    outline: none;
+  }
+  .input-area:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-muted);
+  }
+  .input-area::placeholder { color: var(--text-muted); }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 18px;
+    transition: all 0.1s ease;
+  }
+  .card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-muted);
+  }
+  .card-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+
+  .tag {
+    display: inline-flex; align-items: center;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .tag-accent { background: var(--accent-muted); color: var(--accent); }
+  .tag-success { background: rgba(22, 163, 74, 0.15); color: #4ade80; }
+  .tag-warning { background: rgba(234, 179, 8, 0.15); color: #facc15; }
+  .tag-danger { background: rgba(220, 38, 38, 0.15); color: #f87171; }
+  .tag-row { display: flex; gap: 8px; margin-bottom: 16px; }
+
+  .toggle-track {
+    width: 40px; height: 22px;
+    background: var(--bg-active);
+    border-radius: 4px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .toggle-track.active { background: var(--accent); }
+  .toggle-thumb {
+    width: 16px; height: 16px;
+    background: white;
+    border-radius: 3px;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: transform 0.15s ease;
+  }
+  .toggle-track.active .toggle-thumb { transform: translateX(18px); }
+
+  .color-grid { display: grid; grid-template-columns: repeat(auto-fill, 80px); gap: 12px; }
+  .color-swatch {
+    width: 80px; height: 60px; border-radius: var(--radius-sm);
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 6px; font-size: 10px; color: rgba(255,255,255,0.7);
+  }
+</style>
+</head>
+<body>
+
+<div class="theme-label">Theme 2</div>
+<h1>Ember</h1>
+<p class="subtitle">Geist / Orange Accent / Warme Darks / Scharfe Kanten / Kompakt</p>
+
+<div class="section">
+  <h2>Farben</h2>
+  <div class="color-grid">
+    <div class="color-swatch" style="background: #111110">Primary</div>
+    <div class="color-swatch" style="background: #1c1c1a">Secondary</div>
+    <div class="color-swatch" style="background: #262624">Tertiary</div>
+    <div class="color-swatch" style="background: #f97316">Accent</div>
+    <div class="color-swatch" style="background: #fb923c">Accent H</div>
+    <div class="color-swatch" style="background: #dc2626">Danger</div>
+    <div class="color-swatch" style="background: #16a34a">Success</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Typography</h2>
+  <h1>Heading 1 — The quick brown fox</h1>
+  <h2>Heading 2 — The quick brown fox</h2>
+  <h3>HEADING 3 — THE QUICK BROWN FOX</h3>
+  <p>Body text — Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt.</p>
+  <p style="font-size: 12px; color: var(--text-muted); font-family: 'Geist Mono', monospace">Caption — monospace, muted, timestamps</p>
+  <div class="code-block">
+    <span class="comment">// Ember style code</span><br>
+    <span class="keyword">const</span> <span class="func">server</span> = <span class="keyword">await</span> createServer({<br>
+    &nbsp;&nbsp;name: <span class="string">"My Server"</span>,<br>
+    &nbsp;&nbsp;icon: <span class="string">"ember.png"</span><br>
+    });
+  </div>
+</div>
+
+<div class="section">
+  <h2>Buttons</h2>
+  <div class="btn-row">
+    <button class="btn btn-primary">Primary</button>
+    <button class="btn btn-secondary">Secondary</button>
+    <button class="btn btn-ghost">Ghost</button>
+    <button class="btn btn-danger">Danger</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary btn-sm">Small</button>
+    <button class="btn btn-primary">Medium</button>
+    <button class="btn btn-primary btn-lg">Large</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Tags</h2>
+  <div class="tag-row">
+    <span class="tag tag-accent">ONLINE</span>
+    <span class="tag tag-success">CONNECTED</span>
+    <span class="tag tag-warning">IDLE</span>
+    <span class="tag tag-danger">DND</span>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Input</h2>
+  <input class="input-area" placeholder="Nachricht an #general..." />
+</div>
+
+<div class="section">
+  <h2>Chat Messages</h2>
+  <div class="chat">
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #fb923c">Manu</span>
+          <span class="msg-time">14:32</span>
+        </div>
+        <div class="msg-text">Hey, hat jemand den neuen Voice Channel getestet? Die Latenz ist krass niedrig.</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar" style="background: rgba(22,163,74,0.15); color: #16a34a">A</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #4ade80">Alex</span>
+          <span class="msg-time">14:33</span>
+        </div>
+        <div class="msg-text">Ja! Fühlt sich besser an als Discord. Hast du <code>noise suppression</code> aktiviert?</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #fb923c">Manu</span>
+          <span class="msg-time">14:34</span>
+        </div>
+        <div class="msg-text">Klar, RNNoise läuft. Hier der Config:</div>
+        <div class="code-block">
+          <span class="keyword">const</span> voiceConfig = {<br>
+          &nbsp;&nbsp;noiseSuppression: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;echoCancellation: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;sampleRate: <span class="string">48000</span><br>
+          };
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Cards</h2>
+  <div class="card-row">
+    <div class="card">
+      <h3>SERVER INFO</h3>
+      <p style="font-size: 13px">12 Members online</p>
+      <div class="tag-row" style="margin-top: 10px">
+        <span class="tag tag-accent">GAMING</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>VOICE CHANNEL</h3>
+      <p style="font-size: 13px">3 connected</p>
+      <button class="btn btn-primary btn-sm" style="margin-top: 8px">Join</button>
+    </div>
+    <div class="card">
+      <h3>SETTINGS</h3>
+      <p style="font-size: 13px">Notifications</p>
+      <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px">
+        <div class="toggle-track active"><div class="toggle-thumb"></div></div>
+        <span style="font-size: 12px">Push</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

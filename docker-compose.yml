@@ -1,0 +1,14 @@
+services:
+  tulpo:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - tulpo_data:/data
+    environment:
+      - TULPO_PORT=3000
+      - TULPO_SESSION_SECRET=change-me-in-production
+    restart: unless-stopped
+
+volumes:
+  tulpo_data:

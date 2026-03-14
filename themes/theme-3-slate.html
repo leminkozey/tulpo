@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Theme 3 — Slate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #0f1117;
+    --bg-secondary: #161920;
+    --bg-tertiary: #1d2029;
+    --bg-hover: #252833;
+    --bg-active: #2d313e;
+    --text-primary: #e4e5ea;
+    --text-secondary: #9395a5;
+    --text-muted: #565869;
+    --accent: #3b82f6;
+    --accent-hover: #60a5fa;
+    --accent-muted: rgba(59, 130, 246, 0.12);
+    --border: #1f2230;
+    --danger: #f43f5e;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+  }
+
+  body {
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    padding: 40px;
+    line-height: 1.6;
+  }
+
+  .theme-label {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  h1 { font-size: 34px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.8px; }
+  h2 { font-size: 22px; font-weight: 700; margin-top: 40px; margin-bottom: 16px; }
+  h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; color: var(--text-primary); }
+  p { color: var(--text-secondary); margin-bottom: 16px; font-size: 15px; }
+  .subtitle { font-size: 16px; color: var(--text-secondary); margin-bottom: 40px; }
+
+  .section { margin-bottom: 48px; }
+
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .btn {
+    padding: 10px 22px;
+    border-radius: var(--radius-md);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    transform: scale(1.03);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.25);
+  }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover {
+    background: var(--bg-hover);
+    transform: scale(1.02);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+  }
+  .btn-ghost:hover {
+    color: var(--text-primary);
+    border-color: var(--border);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+  }
+  .btn-danger:hover {
+    background: rgba(244, 63, 94, 0.08);
+    border-color: var(--danger);
+    transform: scale(1.02);
+  }
+
+  .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: var(--radius-sm); }
+  .btn-lg { padding: 14px 30px; font-size: 16px; border-radius: var(--radius-lg); }
+
+  /* Chat — Rounded, friendly */
+  .chat { display: flex; flex-direction: column; gap: 6px; }
+
+  .message {
+    display: flex; gap: 12px; padding: 10px 14px;
+    border-radius: var(--radius-md);
+    transition: background 0.15s ease;
+  }
+  .message:hover { background: var(--bg-secondary); }
+
+  .avatar {
+    width: 42px; height: 42px; border-radius: var(--radius-md);
+    background: var(--accent-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .msg-content { flex: 1; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .msg-author { font-weight: 600; font-size: 14px; }
+  .msg-time { font-size: 11px; color: var(--text-muted); }
+  .msg-text { font-size: 15px; color: var(--text-secondary); line-height: 1.55; }
+  .msg-text code {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg-active);
+    padding: 2px 7px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--accent-hover);
+  }
+
+  .code-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin: 8px 0;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .code-block .keyword { color: #a78bfa; }
+  .code-block .string { color: #34d399; }
+  .code-block .comment { color: var(--text-muted); font-style: italic; }
+
+  .input-area {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 18px;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 15px;
+    width: 100%;
+    max-width: 600px;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+  .input-area:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px var(--accent-muted);
+  }
+  .input-area::placeholder { color: var(--text-muted); }
+
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 22px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .card:hover {
+    transform: translateY(-3px) scale(1.01);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.3);
+    border-color: var(--accent-muted);
+  }
+  .card-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  .tag {
+    display: inline-flex; align-items: center;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tag-accent { background: var(--accent-muted); color: var(--accent-hover); }
+  .tag-success { background: rgba(16, 185, 129, 0.12); color: #34d399; }
+  .tag-warning { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+  .tag-danger { background: rgba(244, 63, 94, 0.12); color: #fb7185; }
+  .tag-row { display: flex; gap: 8px; margin-bottom: 16px; }
+
+  .toggle-track {
+    width: 48px; height: 26px;
+    background: var(--bg-active);
+    border-radius: 13px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .toggle-track.active { background: var(--accent); }
+  .toggle-thumb {
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 3px; left: 3px;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+  .toggle-track.active .toggle-thumb { transform: translateX(22px); }
+
+  .color-grid { display: grid; grid-template-columns: repeat(auto-fill, 80px); gap: 12px; }
+  .color-swatch {
+    width: 80px; height: 60px; border-radius: var(--radius-md);
+    display: flex; align-items: flex-end; justify-content: center;
+    padding-bottom: 6px; font-size: 10px; color: rgba(255,255,255,0.7);
+  }
+</style>
+</head>
+<body>
+
+<div class="theme-label">Theme 3</div>
+<h1>Slate</h1>
+<p class="subtitle">DM Sans / Blue Accent / Rounded / Bouncy Animationen / Friendly</p>
+
+<div class="section">
+  <h2>Farben</h2>
+  <div class="color-grid">
+    <div class="color-swatch" style="background: #0f1117">Primary</div>
+    <div class="color-swatch" style="background: #161920">Secondary</div>
+    <div class="color-swatch" style="background: #1d2029">Tertiary</div>
+    <div class="color-swatch" style="background: #3b82f6">Accent</div>
+    <div class="color-swatch" style="background: #60a5fa">Accent H</div>
+    <div class="color-swatch" style="background: #f43f5e">Danger</div>
+    <div class="color-swatch" style="background: #10b981">Success</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Typography</h2>
+  <h1>Heading 1 — The quick brown fox</h1>
+  <h2>Heading 2 — The quick brown fox</h2>
+  <h3>Heading 3 — The quick brown fox</h3>
+  <p>Body text — Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore.</p>
+  <p style="font-size: 12px; color: var(--text-muted)">Caption text — Smaller, muted, for metadata</p>
+  <div class="code-block">
+    <span class="comment">// Slate style code</span><br>
+    <span class="keyword">const</span> server = <span class="keyword">await</span> createServer({<br>
+    &nbsp;&nbsp;name: <span class="string">"My Server"</span>,<br>
+    &nbsp;&nbsp;icon: <span class="string">"slate.png"</span><br>
+    });
+  </div>
+</div>
+
+<div class="section">
+  <h2>Buttons</h2>
+  <div class="btn-row">
+    <button class="btn btn-primary">Primary</button>
+    <button class="btn btn-secondary">Secondary</button>
+    <button class="btn btn-ghost">Ghost</button>
+    <button class="btn btn-danger">Danger</button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary btn-sm">Small</button>
+    <button class="btn btn-primary">Medium</button>
+    <button class="btn btn-primary btn-lg">Large</button>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Tags</h2>
+  <div class="tag-row">
+    <span class="tag tag-accent">Online</span>
+    <span class="tag tag-success">Connected</span>
+    <span class="tag tag-warning">Idle</span>
+    <span class="tag tag-danger">DND</span>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Input</h2>
+  <input class="input-area" placeholder="Nachricht an #general schreiben..." />
+</div>
+
+<div class="section">
+  <h2>Chat Messages</h2>
+  <div class="chat">
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #60a5fa">Manu</span>
+          <span class="msg-time">Heute um 14:32</span>
+        </div>
+        <div class="msg-text">Hey, hat jemand den neuen Voice Channel getestet? Die Latenz ist krass niedrig.</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar" style="background: rgba(16,185,129,0.12); color: #10b981">A</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #34d399">Alex</span>
+          <span class="msg-time">Heute um 14:33</span>
+        </div>
+        <div class="msg-text">Ja! Fühlt sich besser an als Discord. Hast du <code>noise suppression</code> aktiviert?</div>
+      </div>
+    </div>
+    <div class="message">
+      <div class="avatar">M</div>
+      <div class="msg-content">
+        <div class="msg-header">
+          <span class="msg-author" style="color: #60a5fa">Manu</span>
+          <span class="msg-time">Heute um 14:34</span>
+        </div>
+        <div class="msg-text">Klar, hier der Config:</div>
+        <div class="code-block">
+          <span class="keyword">const</span> voiceConfig = {<br>
+          &nbsp;&nbsp;noiseSuppression: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;echoCancellation: <span class="keyword">true</span>,<br>
+          &nbsp;&nbsp;sampleRate: <span class="string">48000</span><br>
+          };
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Cards</h2>
+  <div class="card-row">
+    <div class="card">
+      <h3>Server Info</h3>
+      <p style="font-size: 13px">12 Members online</p>
+      <div class="tag-row" style="margin-top: 10px">
+        <span class="tag tag-accent">Gaming</span>
+        <span class="tag tag-success">Active</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Voice Channel</h3>
+      <p style="font-size: 13px">3 connected</p>
+      <button class="btn btn-primary btn-sm" style="margin-top: 8px">Join</button>
+    </div>
+    <div class="card">
+      <h3>Settings</h3>
+      <p style="font-size: 13px">Notifications</p>
+      <div style="margin-top: 8px; display: flex; align-items: center; gap: 10px">
+        <div class="toggle-track active"><div class="toggle-thumb"></div></div>
+        <span style="font-size: 13px">Push</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

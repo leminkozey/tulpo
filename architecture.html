@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tulpo — Architecture</title>
+<style>
+  :root {
+    --bg: #0c0d11;
+    --bg2: #14151b;
+    --bg3: #1c1d25;
+    --bg4: #24252e;
+    --text: #e8e9ef;
+    --text2: #8b8d9e;
+    --text3: #4e5064;
+    --accent: #14b8a6;
+    --accent2: #2dd4bf;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --border: #1e1f28;
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Plus Jakarta Sans", -apple-system, system-ui, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* Header */
+  header {
+    padding: 60px 0 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--text2); font-size: 1.1rem; }
+
+  /* Navigation */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(12, 13, 17, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+  nav .container {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  nav a {
+    color: var(--text2);
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  nav a:hover { color: var(--text); background: var(--bg3); }
+
+  /* Sections */
+  section {
+    padding: 48px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  section:last-child { border-bottom: none; }
+
+  h2 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--accent2);
+  }
+  p { color: var(--text2); margin-bottom: 12px; }
+  strong { color: var(--text); font-weight: 600; }
+
+  /* Grid */
+  .grid { display: grid; gap: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+  @media (max-width: 768px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* Cards */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-body { color: var(--text2); font-size: 0.88rem; }
+
+  /* Code */
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    background: var(--bg3);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    color: var(--accent2);
+  }
+  pre {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 0.82rem;
+    line-height: 1.7;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text2);
+  }
+  .kw { color: #c678dd; }
+  .str { color: #98c379; }
+  .cm { color: var(--text3); }
+  .fn { color: #61afef; }
+  .num { color: #d19a66; }
+  .type { color: var(--accent2); }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 0.88rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--text3);
+    font-weight: 500;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  td { color: var(--text2); }
+  td code { font-size: 0.78rem; }
+  tr:hover td { background: var(--bg2); }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge-green { background: rgba(34,197,94,0.12); color: var(--success); }
+  .badge-yellow { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .badge-red { background: rgba(239,68,68,0.12); color: var(--danger); }
+  .badge-blue { background: rgba(20,184,166,0.12); color: var(--accent); }
+
+  /* Flow diagrams */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .flow-step {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--text2);
+    white-space: nowrap;
+  }
+  .flow-arrow {
+    color: var(--text3);
+    padding: 0 6px;
+    font-size: 1.1rem;
+  }
+
+  /* Rating meter */
+  .meter {
+    display: flex;
+    gap: 3px;
+    margin: 8px 0;
+  }
+  .meter-bar {
+    width: 32px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--bg3);
+  }
+  .meter-bar.filled { background: var(--accent); }
+  .meter-bar.warn { background: var(--warning); }
+
+  /* Security section specific */
+  .security-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  @media (max-width: 768px) {
+    .security-grid { grid-template-columns: 1fr; }
+  }
+  .sec-item {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .sec-item h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sec-item p {
+    font-size: 0.82rem;
+    color: var(--text2);
+    margin: 0;
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-green { background: var(--success); }
+  .dot-yellow { background: var(--warning); }
+  .dot-red { background: var(--danger); }
+
+  /* DB Schema */
+  .schema-table {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 8px 0;
+  }
+  .schema-table h4 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .schema-cols {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 0.78rem;
+    color: var(--text3);
+  }
+  .schema-cols span { white-space: nowrap; }
+  .pk { color: var(--warning); }
+  .fk { color: #61afef; }
+
+  /* Accordion */
+  details {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 8px 0;
+  }
+  details[open] { border-color: var(--accent); }
+  summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.92rem;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  summary::before {
+    content: "\25B6";
+    font-size: 0.65rem;
+    color: var(--text3);
+    transition: transform 0.2s;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  summary::-webkit-details-marker { display: none; }
+  details .details-body { padding: 0 20px 16px; }
+
+  footer {
+    padding: 40px 0;
+    text-align: center;
+    color: var(--text3);
+    font-size: 0.82rem;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 3px; }
+
+  @media (prefers-color-scheme: light) {
+    /* Force dark - this app is always dark themed */
+    body { color-scheme: dark; }
+  }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1><span>Tulpo</span> Architecture</h1>
+    <p>System overview, data flow, security model, and database schema</p>
+  </div>
+</header>
+
+<nav>
+  <div class="container">
+    <a href="#overview">Overview</a>
+    <a href="#stack">Stack</a>
+    <a href="#monorepo">Monorepo</a>
+    <a href="#auth">Authentication</a>
+    <a href="#security">Security</a>
+    <a href="#websocket">WebSocket</a>
+    <a href="#database">Database</a>
+    <a href="#frontend">Frontend</a>
+    <a href="#deployment">Deployment</a>
+  </div>
+</nav>
+
+<!-- ==================== OVERVIEW ==================== -->
+<section id="overview">
+  <div class="container">
+    <h2>System Overview</h2>
+    <p>Tulpo is a self-hosted communication platform. All data stays on your server. No telemetry, no third-party services, no cloud dependencies.</p>
+
+    <div class="grid grid-3" style="margin-top:20px;">
+      <div class="card">
+        <div class="card-title">Single Binary</div>
+        <div class="card-body">Bun runtime serves API, WebSocket, and static frontend from a single process. No nginx, no reverse proxy needed.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">SQLite</div>
+        <div class="card-body">Embedded database with WAL mode. No separate DB server. Data lives in a single file at <code>/data/tulpo.db</code>.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Real-Time</div>
+        <div class="card-body">Native WebSocket with heartbeat, auto-reconnect, and multi-tab support via connection pooling.</div>
+      </div>
+    </div>
+
+    <h3>Request Flow</h3>
+    <div class="flow">
+      <div class="flow-step">Browser</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step" style="border-color:var(--accent);">Bun.serve()</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">/ws? &rarr; WebSocket</div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">Browser</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step" style="border-color:var(--accent);">Bun.serve()</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">/api/* &rarr; Hono Router</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">SQLite</div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">Browser</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step" style="border-color:var(--accent);">Bun.serve()</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">/* &rarr; Static Files (prod)</div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== STACK ==================== -->
+<section id="stack">
+  <div class="container">
+    <h2>Technology Stack</h2>
+    <table>
+      <thead>
+        <tr><th>Layer</th><th>Technology</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Runtime</td><td><code>Bun 1.3+</code></td><td>Native SQLite, native WebSocket, fast startup, built-in TypeScript</td></tr>
+        <tr><td>API Framework</td><td><code>Hono</code></td><td>Web Standard API, lightweight, large ecosystem, multi-runtime</td></tr>
+        <tr><td>Frontend</td><td><code>SvelteKit + Svelte 5</code></td><td>Runes reactivity, compiled output, small bundle, SPA mode</td></tr>
+        <tr><td>Styling</td><td><code>Tailwind CSS v4</code></td><td>Vite plugin, @theme directive, no config file needed</td></tr>
+        <tr><td>Database</td><td><code>SQLite (bun:sqlite)</code></td><td>Zero config, WAL mode, embedded, single-file backup</td></tr>
+        <tr><td>Password Hashing</td><td><code>Argon2id + Pepper</code></td><td>Memory-hard (64 MiB), 5 iterations, server-side pepper, via Bun.password</td></tr>
+        <tr><td>Validation</td><td><code>Zod</code></td><td>TypeScript-first schema validation, shared between client/server</td></tr>
+        <tr><td>Components</td><td><code>bits-ui</code></td><td>Headless Svelte components (shadcn-svelte foundation)</td></tr>
+        <tr><td>Icons</td><td><code>Lucide</code></td><td>Clean, consistent icon set</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== MONOREPO ==================== -->
+<section id="monorepo">
+  <div class="container">
+    <h2>Monorepo Structure</h2>
+    <p>Bun Workspaces with four packages. Shared types and validators ensure type safety across the full stack.</p>
+
+    <div class="grid grid-2" style="margin-top:16px;">
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">@tulpo/backend</span></div>
+        <div class="card-body">
+          <code>packages/backend/src/</code><br><br>
+          <strong>index.ts</strong> &mdash; Bun.serve entry point<br>
+          <strong>routes/auth.ts</strong> &mdash; Register, Login, Logout, Me<br>
+          <strong>routes/health.ts</strong> &mdash; Health check endpoint<br>
+          <strong>middleware/auth.ts</strong> &mdash; Session validation middleware<br>
+          <strong>middleware/cors.ts</strong> &mdash; CORS configuration<br>
+          <strong>middleware/rateLimit.ts</strong> &mdash; Per-IP rate limiting<br>
+          <strong>middleware/bruteForce.ts</strong> &mdash; Escalating lockouts<br>
+          <strong>ws/handler.ts</strong> &mdash; WebSocket connection manager<br>
+          <strong>ws/types.ts</strong> &mdash; WS type definitions<br>
+          <strong>lib/auth.ts</strong> &mdash; Password hashing, sessions<br>
+          <strong>lib/env.ts</strong> &mdash; Environment config
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">@tulpo/frontend</span></div>
+        <div class="card-body">
+          <code>packages/frontend/src/</code><br><br>
+          <strong>routes/+page.svelte</strong> &mdash; Root redirect<br>
+          <strong>routes/auth/login/</strong> &mdash; Login page<br>
+          <strong>routes/auth/register/</strong> &mdash; Registration page<br>
+          <strong>routes/app/</strong> &mdash; App shell (post-auth)<br>
+          <strong>lib/api.ts</strong> &mdash; HTTP API client<br>
+          <strong>lib/ws.svelte.ts</strong> &mdash; WebSocket client<br>
+          <strong>lib/stores/auth.svelte.ts</strong> &mdash; Auth state (Runes)<br>
+          <strong>app.css</strong> &mdash; Design tokens + themes<br>
+          <strong>app.html</strong> &mdash; HTML shell + fonts
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">@tulpo/shared</span></div>
+        <div class="card-body">
+          <code>packages/shared/src/</code><br><br>
+          <strong>types.ts</strong> &mdash; User, Server, Channel, Message, WS types<br>
+          <strong>validators.ts</strong> &mdash; Zod schemas (register, login)<br>
+          <strong>constants.ts</strong> &mdash; Session duration, heartbeat timing
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="badge badge-blue">@tulpo/db</span></div>
+        <div class="card-body">
+          <code>packages/db/src/</code><br><br>
+          <strong>index.ts</strong> &mdash; DB connection, WAL, pragmas<br>
+          <strong>migrate.ts</strong> &mdash; Migration runner<br>
+          <strong>migrations/001_initial.ts</strong> &mdash; Full schema (16 tables)
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== AUTH ==================== -->
+<section id="auth">
+  <div class="container">
+    <h2>Authentication</h2>
+
+    <h3>Registration Flow</h3>
+    <div class="flow">
+      <div class="flow-step">POST /api/auth/register</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Rate Limit</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Zod Validate</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Check Unique</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Pepper + Argon2id</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Insert User + Session</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Return { user, token }</div>
+    </div>
+
+    <h3>Login Flow</h3>
+    <div class="flow">
+      <div class="flow-step">POST /api/auth/login</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Rate Limit</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Brute Force Check</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Find by Email</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Pepper + Verify</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Create Session (30d)</div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">Return { user, token }</div>
+    </div>
+
+    <h3>Session Management</h3>
+    <table>
+      <thead>
+        <tr><th>Property</th><th>Value</th><th>Note</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Token Format</td><td><code>crypto.randomUUID()</code></td><td>UUID v4, 122 bits of randomness</td></tr>
+        <tr><td>Token Storage</td><td><code>localStorage</code></td><td>SPA pattern, sent via Authorization header</td></tr>
+        <tr><td>Session Duration</td><td><code>30 days</code></td><td>Configurable via SESSION_DURATION_MS</td></tr>
+        <tr><td>Session Data</td><td>user_id, ip_address, user_agent</td><td>Stored server-side in sessions table</td></tr>
+        <tr><td>Transport</td><td><code>Authorization: Bearer &lt;token&gt;</code></td><td>No cookies, no CSRF risk</td></tr>
+        <tr><td>Cleanup</td><td>On login</td><td>Expired sessions for user are purged on login</td></tr>
+      </tbody>
+    </table>
+
+    <h3>API Endpoints</h3>
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Path</th><th>Auth</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>POST</code></td><td><code>/api/auth/register</code></td><td>-</td><td>Create account</td></tr>
+        <tr><td><code>POST</code></td><td><code>/api/auth/login</code></td><td>-</td><td>Sign in, get token</td></tr>
+        <tr><td><code>POST</code></td><td><code>/api/auth/logout</code></td><td>Bearer</td><td>Invalidate session</td></tr>
+        <tr><td><code>GET</code></td><td><code>/api/auth/me</code></td><td>Bearer</td><td>Current user info</td></tr>
+        <tr><td><code>GET</code></td><td><code>/api/health</code></td><td>-</td><td>Health check</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ==================== SECURITY ==================== -->
+<section id="security">
+  <div class="container">
+    <h2>Security Model</h2>
+    <p>Honest assessment of what's implemented, what's missing, and what the risks are.</p>
+
+    <h3>Password Security</h3>
+    <div class="security-grid">
+      <div class="sec-item">
+        <h4><span class="dot dot-green"></span> Argon2id Hashing (Hardened)</h4>
+        <p>State-of-the-art password hashing. <code>timeCost: 5</code>, <code>memoryCost: 65536</code> (64 MiB). Memory-hard (GPU/ASIC-resistant), time-hard (brute-force resistant). Significantly above OWASP minimum recommendations.</p>
+      </div>
+      <div class="sec-item">
+        <h4><span class="dot dot-green"></span> Automatic Salting</h4>
+        <p>Every password gets a unique, cryptographically random 16-byte salt. Generated automatically by Argon2id on each hash operation. The salt is embedded in the hash output string, so no separate salt column needed.</p>
+      </div>
+      <div class="sec-item">
+        <h4><span class="dot dot-green"></span> Server-Side Pepper</h4>
+        <p>A secret pepper (<code>TULPO_PEPPER</code> env var) is appended to every password before hashing. Even if the database is stolen, hashes cannot be cracked without the pepper. Defense-in-depth layer.</p>
+      </div>
+      <div class="sec-item">
+        <h4><span class="dot dot-green"></span> Rate Limiting &amp; Brute Force Protection</h4>
+        <p>Auth routes rate-limited to 20 req/min per IP. Brute force protection with escalating lockouts: 5 fails &rarr; 15min, 10 fails &rarr; 1h, 20 fails &rarr; 24h. Tracked per IP and per email.</p>
+      </div>
+    </div>
+
+    <h3>How Are Passwords Protected?</h3>
+    <div class="card" style="margin:16px 0;">
+      <div class="card-body">
+        <strong style="color:var(--accent);">Three layers of protection:</strong>
+        <ul style="margin:12px 0 0 20px; color:var(--text2);">
+          <li><strong>Salt</strong> &mdash; fresh 16-byte random salt per hash. Two identical passwords produce different hashes. Rainbow tables useless.</li>
+          <li><strong>Pepper</strong> &mdash; server-side secret appended before hashing. DB theft alone is insufficient to crack passwords.</li>
+          <li><strong>Argon2id</strong> &mdash; 5 iterations, 64 MiB memory. Makes each hash attempt expensive for attackers.</li>
+        </ul>
+        <br>
+        <strong>Hash format:</strong> <code>$argon2id$v=19$m=65536,t=5,p=1$&lt;salt&gt;$&lt;hash&gt;</code><br>
+        <strong>Input:</strong> <code>password + TULPO_PEPPER</code> (pepper never stored in DB)
+      </div>
+    </div>
+
+    <h3>Security Scorecard</h3>
+    <table>
+      <thead>
+        <tr><th>Category</th><th>Status</th><th>Rating</th><th>Details</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Password Hashing</td>
+          <td><span class="badge badge-green">Strong</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div></div>
+          </td>
+          <td>Argon2id (t=5, m=64MiB), auto salt, pepper, unique per password</td>
+        </tr>
+        <tr>
+          <td>Session Tokens</td>
+          <td><span class="badge badge-green">Good</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>UUID v4 (122-bit random), indexed, expiring</td>
+        </tr>
+        <tr>
+          <td>Input Validation</td>
+          <td><span class="badge badge-green">Good</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>Zod schemas on all auth endpoints</td>
+        </tr>
+        <tr>
+          <td>SQL Injection</td>
+          <td><span class="badge badge-green">Protected</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div></div>
+          </td>
+          <td>Parameterized queries everywhere, no string concat</td>
+        </tr>
+        <tr>
+          <td>Token Storage</td>
+          <td><span class="badge badge-yellow">Acceptable</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>localStorage (XSS-vulnerable, but standard SPA pattern)</td>
+        </tr>
+        <tr>
+          <td>Rate Limiting</td>
+          <td><span class="badge badge-green">Active</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>20 req/min per IP on auth routes (in-memory)</td>
+        </tr>
+        <tr>
+          <td>Brute Force</td>
+          <td><span class="badge badge-green">Active</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>Escalating lockouts: 5&rarr;15min, 10&rarr;1h, 20&rarr;24h</td>
+        </tr>
+        <tr>
+          <td>Peppering</td>
+          <td><span class="badge badge-green">Active</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div></div>
+          </td>
+          <td>Server-side secret appended before hashing</td>
+        </tr>
+        <tr>
+          <td>CSRF</td>
+          <td><span class="badge badge-green">N/A</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div></div>
+          </td>
+          <td>Bearer token auth &mdash; CSRF not applicable</td>
+        </tr>
+        <tr>
+          <td>CORS</td>
+          <td><span class="badge badge-green">Configured</span></td>
+          <td>
+            <div class="meter"><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar filled"></div><div class="meter-bar"></div></div>
+          </td>
+          <td>Restricted to expected origins</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Known Risks &amp; Mitigations</h3>
+    <details>
+      <summary>XSS could steal session tokens from localStorage</summary>
+      <div class="details-body">
+        <p><strong>Risk:</strong> If an attacker injects JavaScript (XSS), they can read <code>localStorage.getItem("tulpo_token")</code> and hijack the session.</p>
+        <p><strong>Mitigation:</strong> SvelteKit auto-escapes template output. No <code>{@html}</code> usage. Content-Security-Policy headers should be added in production.</p>
+        <p><strong>Alternative:</strong> HttpOnly cookies would prevent JS access to the token, but add CSRF complexity in SPA mode.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Rate limiting is in-memory (resets on restart)</summary>
+      <div class="details-body">
+        <p><strong>Risk:</strong> Rate limit and brute force counters are stored in-memory. Restarting the server resets all counters, allowing an attacker to bypass lockouts.</p>
+        <p><strong>Mitigation:</strong> Argon2id with timeCost=5 provides natural rate limiting (~500ms per hash). For production, consider persisting counters to SQLite or Redis.</p>
+      </div>
+    </details>
+    <details>
+      <summary>SQLite file-level security</summary>
+      <div class="details-body">
+        <p><strong>Risk:</strong> Anyone with filesystem access to <code>tulpo.db</code> has full access to all data including password hashes.</p>
+        <p><strong>Mitigation:</strong> Run in Docker with a named volume. Set file permissions (chmod 600). Argon2id hashes are extremely expensive to crack even if stolen. Pepper would add another layer.</p>
+      </div>
+    </details>
+    <details>
+      <summary>WebSocket authentication</summary>
+      <div class="details-body">
+        <p><strong>Risk:</strong> Token is passed as URL query parameter (<code>/ws?token=...</code>), which may appear in server logs.</p>
+        <p><strong>Mitigation:</strong> Token is validated server-side. Connection is rejected if token is invalid or expired. The IDENTIFY flow provides a secondary authentication step after connection.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ==================== WEBSOCKET ==================== -->
+<section id="websocket">
+  <div class="container">
+    <h2>WebSocket Protocol</h2>
+
+    <h3>Op Codes</h3>
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Name</th><th>Direction</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>0</code></td><td>HELLO</td><td>Server &rarr; Client</td><td>Sent on connect, contains heartbeat_interval</td></tr>
+        <tr><td><code>1</code></td><td>HEARTBEAT</td><td>Client &rarr; Server</td><td>Client keepalive ping</td></tr>
+        <tr><td><code>2</code></td><td>HEARTBEAT_ACK</td><td>Server &rarr; Client</td><td>Server acknowledges heartbeat</td></tr>
+        <tr><td><code>3</code></td><td>IDENTIFY</td><td>Client &rarr; Server</td><td>Authenticate with session token</td></tr>
+        <tr><td><code>10</code></td><td>DISPATCH</td><td>Server &rarr; Client</td><td>Event dispatch (READY, MESSAGE_CREATE, etc.)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Connection Lifecycle</h3>
+    <pre><code><span class="cm">// 1. Client connects</span>
+ws = <span class="kw">new</span> WebSocket(<span class="str">"ws://host/ws?token=..."</span>)
+
+<span class="cm">// 2. Server sends HELLO</span>
+&larr; { <span class="str">"op"</span>: <span class="num">0</span>, <span class="str">"d"</span>: { <span class="str">"heartbeat_interval"</span>: <span class="num">30000</span> } }
+
+<span class="cm">// 3. Client sends IDENTIFY</span>
+&rarr; { <span class="str">"op"</span>: <span class="num">3</span>, <span class="str">"d"</span>: { <span class="str">"token"</span>: <span class="str">"uuid-session-token"</span> } }
+
+<span class="cm">// 4. Server validates, sends READY</span>
+&larr; { <span class="str">"op"</span>: <span class="num">10</span>, <span class="str">"t"</span>: <span class="str">"READY"</span>, <span class="str">"d"</span>: { <span class="str">"user"</span>: { ... } } }
+
+<span class="cm">// 5. Heartbeat loop (every 30s)</span>
+&rarr; { <span class="str">"op"</span>: <span class="num">1</span>, <span class="str">"d"</span>: <span class="kw">null</span> }
+&larr; { <span class="str">"op"</span>: <span class="num">2</span>, <span class="str">"d"</span>: <span class="kw">null</span> }
+
+<span class="cm">// 6. Server checks isAlive every 60s</span>
+<span class="cm">//    Dead connections get closed with code 4002</span></code></pre>
+
+    <h3>Connection Pool</h3>
+    <div class="card">
+      <div class="card-body">
+        <p><strong>Structure:</strong> <code>Map&lt;userId, Set&lt;WebSocket&gt;&gt;</code></p>
+        <p><strong>Multi-tab:</strong> One user can have multiple WebSocket connections (one per browser tab). All receive the same events.</p>
+        <p><strong>Cleanup:</strong> On disconnect or heartbeat timeout, the specific socket is removed. When a user has zero connections, they're removed from the pool.</p>
+      </div>
+    </div>
+
+    <h3>Client Reconnection</h3>
+    <table>
+      <thead><tr><th>Attempt</th><th>Delay</th></tr></thead>
+      <tbody>
+        <tr><td>1st</td><td>1 second</td></tr>
+        <tr><td>2nd</td><td>2 seconds</td></tr>
+        <tr><td>3rd</td><td>4 seconds</td></tr>
+        <tr><td>4th</td><td>8 seconds</td></tr>
+        <tr><td>5th+</td><td>16s &rarr; 30s (max)</td></tr>
+      </tbody>
+    </table>
+    <p>Exponential backoff with 30-second cap. Resets to 1s after successful connection.</p>
+  </div>
+</section>
+
+<!-- ==================== DATABASE ==================== -->
+<section id="database">
+  <div class="container">
+    <h2>Database Schema</h2>
+    <p>SQLite with WAL mode, foreign keys enforced, 5s busy timeout. All IDs are 24-char hex strings via <code>lower(hex(randomblob(12)))</code>. Timestamps are ISO 8601 text.</p>
+
+    <h3>SQLite Pragmas</h3>
+    <pre><code><span class="kw">PRAGMA</span> journal_mode = WAL;      <span class="cm">-- Write-ahead log for concurrent reads</span>
+<span class="kw">PRAGMA</span> synchronous = NORMAL;     <span class="cm">-- Balance of safety and speed</span>
+<span class="kw">PRAGMA</span> foreign_keys = ON;        <span class="cm">-- Enforce referential integrity</span>
+<span class="kw">PRAGMA</span> busy_timeout = 5000;      <span class="cm">-- Wait 5s on lock contention</span></code></pre>
+
+    <h3>Tables (16 total)</h3>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+      <div class="schema-table">
+        <h4>users</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span>email UNIQUE</span>
+          <span>username UNIQUE</span>
+          <span>display_name</span>
+          <span>password_hash</span>
+          <span>avatar_url</span>
+          <span>status</span>
+          <span>created_at</span>
+          <span>updated_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>sessions</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">user_id FK</span>
+          <span>token UNIQUE IDX</span>
+          <span>expires_at IDX</span>
+          <span>ip_address</span>
+          <span>user_agent</span>
+          <span>created_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>servers</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span>name</span>
+          <span>icon_url</span>
+          <span class="fk">owner_id FK</span>
+          <span>created_at</span>
+          <span>updated_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>members</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">user_id FK</span>
+          <span class="fk">server_id FK</span>
+          <span>nickname</span>
+          <span>joined_at</span>
+          <span>UNIQUE(user, server)</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>channels</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">server_id FK</span>
+          <span class="fk">category_id FK</span>
+          <span>name</span>
+          <span>topic</span>
+          <span>type (text|voice)</span>
+          <span>position</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>categories</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">server_id FK</span>
+          <span>name</span>
+          <span>position</span>
+          <span>created_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>messages</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">channel_id FK</span>
+          <span class="fk">author_id FK</span>
+          <span>content</span>
+          <span>edited_at</span>
+          <span>created_at</span>
+          <span>IDX(channel, created)</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>attachments</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">message_id FK</span>
+          <span>filename</span>
+          <span>mime_type</span>
+          <span>size</span>
+          <span>url</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>roles</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">server_id FK</span>
+          <span>name</span>
+          <span>color</span>
+          <span>position</span>
+          <span>permissions (bitmask)</span>
+          <span>is_default</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>member_roles</h4>
+        <div class="schema-cols">
+          <span class="fk">member_id FK</span>
+          <span class="fk">role_id FK</span>
+          <span>PK(member, role)</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>invites</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">server_id FK</span>
+          <span class="fk">creator_id FK</span>
+          <span>code UNIQUE</span>
+          <span>max_uses</span>
+          <span>uses</span>
+          <span>expires_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>friends</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">user_id FK</span>
+          <span class="fk">friend_id FK</span>
+          <span>status (pending|accepted|blocked)</span>
+          <span>UNIQUE(user, friend)</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>dm_channels</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span>created_at</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>dm_participants</h4>
+        <div class="schema-cols">
+          <span class="fk">dm_channel_id FK</span>
+          <span class="fk">user_id FK</span>
+          <span>PK(channel, user)</span>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <h4>dm_messages</h4>
+        <div class="schema-cols">
+          <span class="pk">id PK</span>
+          <span class="fk">dm_channel_id FK</span>
+          <span class="fk">author_id FK</span>
+          <span>content</span>
+          <span>edited_at</span>
+          <span>created_at</span>
+          <span>IDX(channel, created)</span>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top:8px; color:var(--text3); font-size:0.82rem;">
+      <span class="pk">PK</span> = Primary Key &nbsp;
+      <span class="fk">FK</span> = Foreign Key &nbsp;
+      IDX = Indexed &nbsp;
+      All FKs have ON DELETE CASCADE where appropriate
+    </p>
+  </div>
+</section>
+
+<!-- ==================== FRONTEND ==================== -->
+<section id="frontend">
+  <div class="container">
+    <h2>Frontend Architecture</h2>
+
+    <h3>SPA Configuration</h3>
+    <table>
+      <thead><tr><th>Setting</th><th>Value</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>SSR</td><td><code>false</code></td><td>Pure SPA, no server-side rendering</td></tr>
+        <tr><td>Prerender</td><td><code>false</code></td><td>Dynamic content, no static generation</td></tr>
+        <tr><td>Adapter</td><td><code>adapter-static</code></td><td>Builds to static files, served by backend</td></tr>
+        <tr><td>Fallback</td><td><code>index.html</code></td><td>All routes handled client-side</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Design System</h3>
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-title">Mineral Theme (Default)</div>
+        <div class="card-body">
+          <div style="display:flex;gap:6px;margin:8px 0;">
+            <div style="width:28px;height:28px;border-radius:6px;background:#0c0d11;border:1px solid var(--border);" title="#0c0d11"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#14151b;" title="#14151b"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#1c1d25;" title="#1c1d25"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#14b8a6;" title="#14b8a6"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#2dd4bf;" title="#2dd4bf"></div>
+          </div>
+          Accent: Teal #14b8a6<br>
+          Font: Plus Jakarta Sans
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Frost Theme (Alternative)</div>
+        <div class="card-body">
+          <div style="display:flex;gap:6px;margin:8px 0;">
+            <div style="width:28px;height:28px;border-radius:6px;background:#0c0d11;border:1px solid var(--border);" title="#0c0d11"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#14151b;" title="#14151b"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#1c1d25;" title="#1c1d25"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#6366f1;" title="#6366f1"></div>
+            <div style="width:28px;height:28px;border-radius:6px;background:#818cf8;" title="#818cf8"></div>
+          </div>
+          Accent: Indigo #6366f1<br>
+          Switchable via <code>[data-theme="frost"]</code>
+        </div>
+      </div>
+    </div>
+
+    <h3>Dev Server Proxy</h3>
+    <p>In development, Vite proxies API and WebSocket requests to the backend:</p>
+    <pre><code><span class="str">"/api"</span>  &rarr;  <span class="str">"http://localhost:3000"</span>
+<span class="str">"/ws"</span>   &rarr;  <span class="str">"ws://localhost:3000"</span> <span class="cm">(WebSocket upgrade)</span></code></pre>
+  </div>
+</section>
+
+<!-- ==================== DEPLOYMENT ==================== -->
+<section id="deployment">
+  <div class="container">
+    <h2>Deployment</h2>
+
+    <h3>Docker (Recommended)</h3>
+    <p>Multi-stage build: dependencies &rarr; frontend build &rarr; production image.</p>
+    <pre><code><span class="cm"># Stage 1: Install deps</span>
+FROM oven/bun:1.3 AS deps
+COPY package.json bun.lock packages/*/package.json
+RUN bun install --frozen-lockfile
+
+<span class="cm"># Stage 2: Build frontend</span>
+FROM deps AS frontend-build
+COPY packages/shared/ packages/frontend/
+RUN cd packages/frontend && bun run build
+
+<span class="cm"># Stage 3: Production</span>
+FROM oven/bun:1.3 AS production
+COPY backend + shared + db + frontend/build
+EXPOSE <span class="num">3000</span>
+VOLUME /data
+CMD [<span class="str">"bun"</span>, <span class="str">"packages/backend/src/index.ts"</span>]</code></pre>
+
+    <h3>Data Persistence</h3>
+    <table>
+      <thead><tr><th>What</th><th>Where</th><th>Backup</th></tr></thead>
+      <tbody>
+        <tr><td>Database</td><td><code>/data/tulpo.db</code></td><td>Copy file while app is running (WAL mode safe)</td></tr>
+        <tr><td>WAL file</td><td><code>/data/tulpo.db-wal</code></td><td>Auto-managed, checkpointed into DB</td></tr>
+        <tr><td>Shared memory</td><td><code>/data/tulpo.db-shm</code></td><td>Ephemeral, recreated on start</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    Tulpo Architecture Documentation &mdash; Generated for internal reference
+  </div>
+</footer>
+
+</body>
+</html>

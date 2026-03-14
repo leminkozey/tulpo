@@ -1,0 +1,89 @@
+import { api } from "$lib/api";
+import type { PublicUser, AuthResponse } from "@tulpo/shared";
+
+const TOKEN_KEY = "tulpo_token";
+
+function createAuthStore() {
+  let user = $state<PublicUser | null>(null);
+  let token = $state<string | null>(null);
+  let loading = $state(true);
+
+  function setSession(authResponse: AuthResponse) {
+    user = authResponse.user;
+    token = authResponse.token;
+    localStorage.setItem(TOKEN_KEY, authResponse.token);
+    api.setToken(authResponse.token);
+  }
+
+  function clearSession() {
+    user = null;
+    token = null;
+    localStorage.removeItem(TOKEN_KEY);
+    api.setToken(null);
+  }
+
+  async function init() {
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (!savedToken) {
+      loading = false;
+      return;
+    }
+
+    api.setToken(savedToken);
+    try {
+      const data = await api.get<{ user: PublicUser }>("/auth/me");
+      user = data.user;
+      token = savedToken;
+    } catch {
+      clearSession();
+    }
+    loading = false;
+  }
+
+  async function register(email: string, username: string, password: string) {
+    const data = await api.post<AuthResponse>("/auth/register", {
+      email,
+      username,
+      password,
+    });
+    setSession(data);
+  }
+
+  async function login(email: string, password: string) {
+    const data = await api.post<AuthResponse>("/auth/login", {
+      email,
+      password,
+    });
+    setSession(data);
+  }
+
+  async function logout() {
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // Ignore - clear local state regardless
+    }
+    clearSession();
+  }
+
+  return {
+    get user() {
+      return user;
+    },
+    get token() {
+      return token;
+    },
+    get loading() {
+      return loading;
+    },
+    get isAuthenticated() {
+      return !!user;
+    },
+    init,
+    register,
+    login,
+    logout,
+  };
+}
+
+export const auth = createAuthStore();

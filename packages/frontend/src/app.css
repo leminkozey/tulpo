@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", -apple-system, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --color-bg-primary: #0c0d11;
+  --color-bg-secondary: #14151b;
+  --color-bg-tertiary: #1c1d25;
+  --color-bg-hover: #24252e;
+  --color-bg-active: #2c2d38;
+
+  --color-text-primary: #e8e9ef;
+  --color-text-secondary: #8b8d9e;
+  --color-text-muted: #4e5064;
+
+  --color-accent: #14b8a6;
+  --color-accent-hover: #2dd4bf;
+  --color-accent-muted: oklch(0.7 0.15 175 / 0.1);
+
+  --color-danger: #ef4444;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+
+  --color-border: #1e1f28;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 20px;
+  --radius-full: 9999px;
+}
+
+/* CSS Custom Properties for runtime theming */
+:root {
+  --bg-primary: #0c0d11;
+  --bg-secondary: #14151b;
+  --bg-tertiary: #1c1d25;
+  --bg-hover: #24252e;
+  --bg-active: #2c2d38;
+  --text-primary: #e8e9ef;
+  --text-secondary: #8b8d9e;
+  --text-muted: #4e5064;
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-muted: rgba(20, 184, 166, 0.1);
+  --border: #1e1f28;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+
+/* Frost Theme */
+[data-theme="frost"] {
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-muted: rgba(99, 102, 241, 0.1);
+}
+
+/* Global base */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}

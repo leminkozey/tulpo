@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Component Gallery — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg-primary: #0c0d11;
+    --bg-secondary: #14151b;
+    --bg-tertiary: #1c1d25;
+    --bg-hover: #24252e;
+    --bg-active: #2c2d38;
+    --text-primary: #e8e9ef;
+    --text-secondary: #8b8d9e;
+    --text-muted: #4e5064;
+    --accent: #14b8a6;
+    --accent-hover: #2dd4bf;
+    --accent-muted: rgba(20, 184, 166, 0.1);
+    --border: #1e1f28;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+  }
+
+  /* ===== GALLERY LAYOUT ===== */
+  .gallery-header {
+    padding: 48px 40px 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .gallery-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 6px; }
+  .gallery-header p { color: var(--text-secondary); font-size: 14px; }
+
+  .gallery-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+    padding: 0 40px;
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+  }
+  .gallery-nav a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 12px 16px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+  }
+  .gallery-nav a:hover { color: var(--text-primary); border-bottom-color: var(--text-muted); }
+
+  .component-section {
+    padding: 48px 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .component-section:last-child { border-bottom: none; }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.3px;
+  }
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .component-block {
+    margin-bottom: 36px;
+  }
+  .component-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+  }
+
+  .preview-and-code {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  .preview {
+    padding: 28px;
+    background: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .preview.col {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .code-panel {
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .code-panel pre {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    padding: 20px;
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 300px;
+    margin: 0;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    z-index: 10;
+  }
+  .copy-btn:hover { color: var(--text-primary); border-color: var(--text-muted); }
+  .copy-btn.copied { color: var(--success); border-color: var(--success); }
+
+  /* Full width preview */
+  .preview-and-code.full {
+    grid-template-columns: 1fr;
+  }
+  .preview-and-code.full .code-panel {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ===== TOKEN TABLE ===== */
+  .token-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .token-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .token-table td {
+    padding: 10px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .token-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent-hover);
+  }
+  .token-table td:nth-child(2) {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .token-table tr:last-child td { border-bottom: none; }
+
+  .color-dot {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
+    vertical-align: middle;
+    margin-right: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+
+  /* ===== ACTUAL COMPONENTS (production CSS) ===== */
+
+  /* Buttons */
+  .btn {
+    padding: 10px 20px;
+    border-radius: var(--radius-md);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+  }
+  .btn-primary { background: var(--accent); color: #0c0d11; }
+  .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+  .btn-primary:active { transform: translateY(1px); }
+
+  .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--bg-hover); border-color: var(--text-muted); transform: translateY(-1px); }
+  .btn-secondary:active { transform: translateY(1px); background: var(--bg-active); }
+
+  .btn-ghost { background: transparent; color: var(--text-secondary); }
+  .btn-ghost:hover { background: var(--bg-tertiary); color: var(--text-primary); transform: translateY(-1px); }
+  .btn-ghost:active { transform: translateY(1px); background: var(--bg-hover); }
+
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+  .btn-danger:hover { background: rgba(239,68,68,0.1); border-color: var(--danger); transform: translateY(-1px); }
+  .btn-danger:active { transform: translateY(1px); background: rgba(239,68,68,0.15); }
+
+  .btn-sm { padding: 6px 14px; font-size: 13px; border-radius: var(--radius-sm); }
+  .btn-lg { padding: 14px 28px; font-size: 16px; font-weight: 700; border-radius: var(--radius-lg); }
+
+  /* Tags */
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 12px; font-weight: 600;
+  }
+  .tag-accent { background: var(--accent-muted); color: var(--accent-hover); }
+  .tag-success { background: rgba(34,197,94,0.12); color: #4ade80; }
+  .tag-warning { background: rgba(245,158,11,0.12); color: #fbbf24; }
+  .tag-danger { background: rgba(239,68,68,0.12); color: #f87171; }
+
+  /* Input */
+  .input-area {
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    color: var(--text-primary);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    transition: border-color 0.15s ease;
+    outline: none;
+  }
+  .input-area:focus { border-color: var(--text-muted); }
+  .input-area::placeholder { color: var(--text-muted); }
+
+  /* Avatar */
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--accent-muted);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 16px; color: var(--accent);
+    flex-shrink: 0;
+  }
+  .avatar-sm { width: 32px; height: 32px; font-size: 13px; }
+  .avatar-lg { width: 56px; height: 56px; font-size: 22px; }
+
+  /* Message */
+  .message {
+    display: flex; gap: 12px; padding: 8px 12px;
+    border-radius: var(--radius-md);
+    transition: background 0.1s ease;
+    width: 100%;
+  }
+  .message:hover { background: var(--bg-hover); }
+  .msg-content { flex: 1; }
+  .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+  .msg-author { font-weight: 700; font-size: 14px; }
+  .msg-time { font-size: 11px; color: var(--text-muted); }
+  .msg-text { font-size: 14.5px; color: var(--text-secondary); line-height: 1.5; }
+  .msg-text code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg-active); padding: 2px 6px;
+    border-radius: 4px; font-size: 13px; color: var(--accent-hover);
+  }
+
+  /* Code Block */
+  .code-block {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px; margin: 8px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px; line-height: 1.7;
+  }
+  .code-block .kw { color: #f472b6; }
+  .code-block .str { color: var(--accent-hover); }
+  .code-block .cmt { color: var(--text-muted); font-style: italic; }
+
+  /* Card */
+  .card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    transition: all 0.15s ease;
+  }
+  .card:hover { border-color: var(--text-muted); transform: translateY(-2px); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+  /* Toggle */
+  .toggle-track {
+    width: 44px; height: 24px;
+    background: var(--bg-active);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+  .toggle-track.active { background: var(--accent); }
+  .toggle-thumb {
+    width: 18px; height: 18px;
+    background: white; border-radius: 50%;
+    position: absolute; top: 3px; left: 3px;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .toggle-track.active .toggle-thumb { transform: translateX(20px); }
+</style>
+</head>
+<body>
+
+<div class="gallery-header">
+  <h1>Component Gallery</h1>
+  <p>All UI components with live preview and copy-paste code. The single source of truth for the frontend.</p>
+</div>
+
+<nav class="gallery-nav">
+  <a href="#colors">Colors</a>
+  <a href="#typography">Typography</a>
+  <a href="#buttons">Buttons</a>
+  <a href="#inputs">Inputs</a>
+  <a href="#tags">Tags</a>
+  <a href="#avatars">Avatars</a>
+  <a href="#messages">Messages</a>
+  <a href="#code-blocks">Code Blocks</a>
+  <a href="#cards">Cards</a>
+  <a href="#toggles">Toggles</a>
+  <a href="#rules">Rules</a>
+</nav>
+
+<!-- ===== COLORS ===== -->
+<section class="component-section" id="colors">
+  <h2 class="section-title">Colors</h2>
+  <p class="section-desc">All colors as CSS custom properties. No hardcoded values in components.</p>
+
+  <div class="component-block">
+    <div class="component-label">CSS Variables</div>
+    <div class="preview-and-code full">
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>:root {
+  --bg-primary: #0c0d11;
+  --bg-secondary: #14151b;
+  --bg-tertiary: #1c1d25;
+  --bg-hover: #24252e;
+  --bg-active: #2c2d38;
+
+  --text-primary: #e8e9ef;
+  --text-secondary: #8b8d9e;
+  --text-muted: #4e5064;
+
+  --accent: #14b8a6;
+  --accent-hover: #2dd4bf;
+  --accent-muted: rgba(20, 184, 166, 0.1);
+
+  --danger: #ef4444;
+  --success: #22c55e;
+  --warning: #f59e0b;
+
+  --border: #1e1f28;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="component-block">
+    <div class="component-label">Palette</div>
+    <table class="token-table">
+      <tr><th>Token</th><th>Hex</th><th>Preview</th><th>Usage</th></tr>
+      <tr><td>--bg-primary</td><td>#0c0d11</td><td><span class="color-dot" style="background:#0c0d11"></span></td><td style="color:var(--text-secondary)">App background</td></tr>
+      <tr><td>--bg-secondary</td><td>#14151b</td><td><span class="color-dot" style="background:#14151b"></span></td><td style="color:var(--text-secondary)">Cards, panels</td></tr>
+      <tr><td>--bg-tertiary</td><td>#1c1d25</td><td><span class="color-dot" style="background:#1c1d25"></span></td><td style="color:var(--text-secondary)">Inputs, elevated surfaces</td></tr>
+      <tr><td>--bg-hover</td><td>#24252e</td><td><span class="color-dot" style="background:#24252e"></span></td><td style="color:var(--text-secondary)">Hover states</td></tr>
+      <tr><td>--bg-active</td><td>#2c2d38</td><td><span class="color-dot" style="background:#2c2d38"></span></td><td style="color:var(--text-secondary)">Active, inline code bg</td></tr>
+      <tr><td>--text-primary</td><td>#e8e9ef</td><td><span class="color-dot" style="background:#e8e9ef"></span></td><td style="color:var(--text-secondary)">Headings</td></tr>
+      <tr><td>--text-secondary</td><td>#8b8d9e</td><td><span class="color-dot" style="background:#8b8d9e"></span></td><td style="color:var(--text-secondary)">Body text</td></tr>
+      <tr><td>--text-muted</td><td>#4e5064</td><td><span class="color-dot" style="background:#4e5064"></span></td><td style="color:var(--text-secondary)">Timestamps, placeholders</td></tr>
+      <tr><td>--accent</td><td>#14b8a6</td><td><span class="color-dot" style="background:#14b8a6"></span></td><td style="color:var(--text-secondary)">Primary buttons</td></tr>
+      <tr><td>--accent-hover</td><td>#2dd4bf</td><td><span class="color-dot" style="background:#2dd4bf"></span></td><td style="color:var(--text-secondary)">Accent hover, code text</td></tr>
+      <tr><td>--danger</td><td>#ef4444</td><td><span class="color-dot" style="background:#ef4444"></span></td><td style="color:var(--text-secondary)">Danger, errors</td></tr>
+      <tr><td>--success</td><td>#22c55e</td><td><span class="color-dot" style="background:#22c55e"></span></td><td style="color:var(--text-secondary)">Online, connected</td></tr>
+      <tr><td>--warning</td><td>#f59e0b</td><td><span class="color-dot" style="background:#f59e0b"></span></td><td style="color:var(--text-secondary)">Idle, warnings</td></tr>
+      <tr><td>--border</td><td>#1e1f28</td><td><span class="color-dot" style="background:#1e1f28"></span></td><td style="color:var(--text-secondary)">Borders, dividers</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ===== TYPOGRAPHY ===== -->
+<section class="component-section" id="typography">
+  <h2 class="section-title">Typography</h2>
+  <p class="section-desc">Plus Jakarta Sans for UI, JetBrains Mono for code.</p>
+
+  <div class="component-block">
+    <div class="component-label">Headings & Text</div>
+    <div class="preview-and-code">
+      <div class="preview col">
+        <span style="font-size:32px;font-weight:800;letter-spacing:-0.8px">Heading 1</span>
+        <span style="font-size:22px;font-weight:700;letter-spacing:-0.3px">Heading 2</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text-secondary)">Heading 3</span>
+        <span style="font-size:15px;color:var(--text-secondary)">Body text — regular paragraph content</span>
+        <span style="font-size:13px;color:var(--text-muted)">Caption — timestamps, metadata</span>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent-hover);background:var(--bg-active);padding:2px 6px;border-radius:4px">inline code</span>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>/* H1 */
+font-size: 32px;
+font-weight: 800;
+letter-spacing: -0.8px;
+color: var(--text-primary);
+
+/* H2 */
+font-size: 22px;
+font-weight: 700;
+letter-spacing: -0.3px;
+
+/* H3 */
+font-size: 14px;
+font-weight: 700;
+color: var(--text-secondary);
+
+/* Body */
+font-size: 15px;
+color: var(--text-secondary);
+
+/* Caption */
+font-size: 13px;
+color: var(--text-muted);
+
+/* Inline Code */
+font-family: 'JetBrains Mono', monospace;
+font-size: 13px;
+color: var(--accent-hover);
+background: var(--bg-active);
+padding: 2px 6px;
+border-radius: 4px;</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== BUTTONS ===== -->
+<section class="component-section" id="buttons">
+  <h2 class="section-title">Buttons</h2>
+  <p class="section-desc">Hover = lift (-1px). Active = press (+1px). NO glow, NO box-shadow.</p>
+
+  <div class="component-block">
+    <div class="component-label">Variants</div>
+    <div class="preview-and-code">
+      <div class="preview">
+        <button class="btn btn-primary">Primary</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-danger">Danger</button>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-md);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0c0d11;
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(1px);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+.btn-secondary:active {
+  transform: translateY(1px);
+  background: var(--bg-active);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+.btn-ghost:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+.btn-ghost:active {
+  transform: translateY(1px);
+  background: var(--bg-hover);
+}
+
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid rgba(239,68,68,0.3);
+}
+.btn-danger:hover {
+  background: rgba(239,68,68,0.1);
+  border-color: var(--danger);
+  transform: translateY(-1px);
+}
+.btn-danger:active {
+  transform: translateY(1px);
+  background: rgba(239,68,68,0.15);
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="component-block">
+    <div class="component-label">Sizes</div>
+    <div class="preview-and-code">
+      <div class="preview">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Medium</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.btn-sm {
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: var(--radius-sm); /* 6px */
+}
+/* Medium = default .btn */
+.btn-lg {
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: var(--radius-lg); /* 14px */
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== INPUTS ===== -->
+<section class="component-section" id="inputs">
+  <h2 class="section-title">Inputs</h2>
+  <p class="section-desc">Focus = border changes to --text-muted. No glow, no accent color on focus.</p>
+
+  <div class="component-block">
+    <div class="component-label">Text Input</div>
+    <div class="preview-and-code">
+      <div class="preview col" style="gap: 16px">
+        <input class="input-area" placeholder="Default state..." style="max-width: 400px" />
+        <input class="input-area" placeholder="Click me for focus..." style="max-width: 400px" />
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.input-area {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  width: 100%;
+  transition: border-color 0.15s ease;
+  outline: none;
+}
+.input-area:focus {
+  border-color: var(--text-muted);
+  /* NO box-shadow */
+  /* NO accent color */
+}
+.input-area::placeholder {
+  color: var(--text-muted);
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TAGS ===== -->
+<section class="component-section" id="tags">
+  <h2 class="section-title">Tags / Badges</h2>
+  <p class="section-desc">Pill shape. Subtle background at 10-12% opacity.</p>
+
+  <div class="component-block">
+    <div class="component-label">Variants</div>
+    <div class="preview-and-code">
+      <div class="preview">
+        <span class="tag tag-accent">Online</span>
+        <span class="tag tag-success">Connected</span>
+        <span class="tag tag-warning">Idle</span>
+        <span class="tag tag-danger">Do Not Disturb</span>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tag-accent {
+  background: rgba(20, 184, 166, 0.1);
+  color: #2dd4bf;
+}
+.tag-success {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+.tag-warning {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+.tag-danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== AVATARS ===== -->
+<section class="component-section" id="avatars">
+  <h2 class="section-title">Avatars</h2>
+  <p class="section-desc">Always round (50%). Three sizes.</p>
+
+  <div class="component-block">
+    <div class="component-label">Sizes</div>
+    <div class="preview-and-code">
+      <div class="preview">
+        <div class="avatar avatar-sm">M</div>
+        <div class="avatar">M</div>
+        <div class="avatar avatar-lg">M</div>
+        <div class="avatar" style="background:rgba(34,197,94,0.12);color:#22c55e">A</div>
+        <div class="avatar" style="background:rgba(249,115,22,0.12);color:#f97316">L</div>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--accent-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.avatar-sm { width: 32px; height: 32px; font-size: 13px; }
+.avatar-lg { width: 56px; height: 56px; font-size: 22px; }
+
+/* Custom colors per user */
+&lt;div class="avatar"
+  style="background:rgba(34,197,94,0.12);
+         color:#22c55e"&gt;A&lt;/div&gt;</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MESSAGES ===== -->
+<section class="component-section" id="messages">
+  <h2 class="section-title">Chat Messages</h2>
+  <p class="section-desc">Hover = bg-hover. No border-left, no glow.</p>
+
+  <div class="component-block">
+    <div class="component-label">Message with Text + Code</div>
+    <div class="preview-and-code full">
+      <div class="preview col" style="gap: 4px">
+        <div class="message">
+          <div class="avatar">M</div>
+          <div class="msg-content">
+            <div class="msg-header">
+              <span class="msg-author" style="color:#2dd4bf">Manu</span>
+              <span class="msg-time">Today at 2:32 PM</span>
+            </div>
+            <div class="msg-text">Hey, has anyone tested the new voice channel?</div>
+          </div>
+        </div>
+        <div class="message">
+          <div class="avatar" style="background:rgba(34,197,94,0.12);color:#22c55e">A</div>
+          <div class="msg-content">
+            <div class="msg-header">
+              <span class="msg-author" style="color:#4ade80">Alex</span>
+              <span class="msg-time">Today at 2:33 PM</span>
+            </div>
+            <div class="msg-text">Yeah! Did you enable <code>noise suppression</code>?</div>
+          </div>
+        </div>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.message {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  transition: background 0.1s ease;
+}
+.message:hover {
+  background: var(--bg-hover);
+}
+.msg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.msg-author {
+  font-weight: 700;
+  font-size: 14px;
+  /* color = role color */
+}
+.msg-time {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.msg-text {
+  font-size: 14.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.msg-text code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg-active);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--accent-hover);
+}
+
+&lt;!-- HTML --&gt;
+&lt;div class="message"&gt;
+  &lt;div class="avatar"&gt;M&lt;/div&gt;
+  &lt;div class="msg-content"&gt;
+    &lt;div class="msg-header"&gt;
+      &lt;span class="msg-author"&gt;Manu&lt;/span&gt;
+      &lt;span class="msg-time"&gt;2:32 PM&lt;/span&gt;
+    &lt;/div&gt;
+    &lt;div class="msg-text"&gt;Hello world&lt;/div&gt;
+  &lt;/div&gt;
+&lt;/div&gt;</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CODE BLOCKS ===== -->
+<section class="component-section" id="code-blocks">
+  <h2 class="section-title">Code Blocks</h2>
+  <p class="section-desc">JetBrains Mono. Pink keywords, teal strings, muted comments.</p>
+
+  <div class="component-block">
+    <div class="component-label">Syntax Highlighted</div>
+    <div class="preview-and-code full">
+      <div class="preview col">
+        <div class="code-block" style="width:100%">
+          <span class="cmt">// Voice config example</span><br>
+          <span class="kw">const</span> voiceConfig = {<br>
+          &nbsp;&nbsp;noiseSuppression: <span class="kw">true</span>,<br>
+          &nbsp;&nbsp;echoCancellation: <span class="kw">true</span>,<br>
+          &nbsp;&nbsp;sampleRate: <span class="str">48000</span><br>
+          };
+        </div>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.code-block {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-primary);
+}
+
+/* Syntax Colors */
+.keyword { color: #f472b6; }  /* pink */
+.string  { color: #2dd4bf; }  /* teal */
+.comment { color: #4e5064;    /* muted */
+           font-style: italic; }</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== CARDS ===== -->
+<section class="component-section" id="cards">
+  <h2 class="section-title">Cards</h2>
+  <p class="section-desc">Hover = lift + neutral shadow. No colored glow.</p>
+
+  <div class="component-block">
+    <div class="component-label">Standard Card</div>
+    <div class="preview-and-code">
+      <div class="preview">
+        <div class="card" style="width: 220px">
+          <h3 style="font-size:14px;font-weight:700;margin-bottom:8px;color:var(--text-secondary)">Voice Channel</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">3 connected</p>
+          <button class="btn btn-primary btn-sm">Join</button>
+        </div>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: all 0.15s ease;
+}
+.card:hover {
+  border-color: var(--text-muted);
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  /* Neutral shadow ONLY */
+  /* NO colored glow */
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TOGGLES ===== -->
+<section class="component-section" id="toggles">
+  <h2 class="section-title">Toggles</h2>
+  <p class="section-desc">Only component with bounce animation (thumb).</p>
+
+  <div class="component-block">
+    <div class="component-label">On / Off</div>
+    <div class="preview-and-code">
+      <div class="preview" style="gap: 20px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="toggle-track" onclick="this.classList.toggle('active')"><div class="toggle-thumb"></div></div>
+          <span style="font-size:13px;color:var(--text-secondary)">Off</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="toggle-track active" onclick="this.classList.toggle('active')"><div class="toggle-thumb"></div></div>
+          <span style="font-size:13px;color:var(--text-secondary)">On</span>
+        </div>
+      </div>
+      <div class="code-panel">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>.toggle-track {
+  width: 44px; height: 24px;
+  background: var(--bg-active);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.toggle-track.active {
+  background: var(--accent);
+}
+.toggle-thumb {
+  width: 18px; height: 18px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: transform 0.2s
+    cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.toggle-track.active .toggle-thumb {
+  transform: translateX(20px);
+}</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== RULES ===== -->
+<section class="component-section" id="rules">
+  <h2 class="section-title">Iron Rules</h2>
+  <p class="section-desc">These rules apply to EVERY component. No exceptions.</p>
+
+  <table class="token-table">
+    <tr><th style="width:30%">Rule</th><th>Details</th></tr>
+    <tr>
+      <td style="color:var(--danger);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">NO GLOW</td>
+      <td style="color:var(--text-secondary)">No colored box-shadows on hover/focus/active. Only exception: cards have a neutral shadow (rgba(0,0,0,0.3)).</td>
+    </tr>
+    <tr>
+      <td style="color:var(--warning);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">Focus = Border only</td>
+      <td style="color:var(--text-secondary)">Input focus only changes border-color to --text-muted. No ring, no outline, no shadow.</td>
+    </tr>
+    <tr>
+      <td style="color:var(--accent-hover);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">Subtle Hover</td>
+      <td style="color:var(--text-secondary)">Buttons: translateY(-1px). Cards: translateY(-2px). Messages: bg change only. Nothing flashy.</td>
+    </tr>
+    <tr>
+      <td style="color:var(--accent-hover);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">Active = Press</td>
+      <td style="color:var(--text-secondary)">Buttons: translateY(1px) on :active. Provides haptic feedback without glow.</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-primary);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">Transitions</td>
+      <td style="color:var(--text-secondary)">0.1s - 0.2s ease. Never longer. Never bouncy (except toggle thumb cubic-bezier).</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-primary);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">Spacing</td>
+      <td style="color:var(--text-secondary)">4px grid basis. Gaps: 4px (tight), 8px (compact), 12px (default), 16px (spacious).</td>
+    </tr>
+    <tr>
+      <td style="color:var(--text-primary);font-family:'Plus Jakarta Sans',sans-serif;font-weight:700">No custom colors</td>
+      <td style="color:var(--text-secondary)">Only use defined CSS custom properties. Never hardcode hex values in components.</td>
+    </tr>
+  </table>
+</section>
+
+<script>
+function copyCode(btn) {
+  const pre = btn.parentElement.querySelector('pre');
+  navigator.clipboard.writeText(pre.textContent).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  });
+}
+</script>
+
+</body>
+</html>
