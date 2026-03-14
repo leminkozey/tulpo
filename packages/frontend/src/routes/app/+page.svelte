@@ -86,6 +86,9 @@
   let chatParticipants = $state<{ id: string; username: string; display_name?: string }[]>([]);
   let messageInputEl: HTMLInputElement | undefined = $state();
 
+  // Message delete menu
+  let deleteMenu = $state<{ messageId: string; x: number; y: number; canDeleteForEveryone: boolean } | null>(null);
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -338,6 +341,15 @@
           }
         }
       }));
+      unsubs.push(wsClient.on('DM_MESSAGE_DELETED', (data: any) => {
+        if (data.channel_id === activeDmChannelId) {
+          messages = messages.map(m =>
+            m.id === data.message_id
+              ? { ...m, content: data.content }
+              : m
+          );
+        }
+      }));
     });
   });
 
@@ -578,6 +590,43 @@
     }
   }
 
+  function canDeleteForEveryone(msg: any): boolean {
+    // Group admin can always delete any message
+    if (activeDmUser?.is_group && activeDmUser?.owner_id === auth.user?.id) return true;
+    // Own message under 20 minutes
+    if (msg.author_id !== auth.user?.id) return false;
+    return Date.now() - new Date(msg.created_at).getTime() < 20 * 60 * 1000;
+  }
+
+  function openDeleteMenu(e: MouseEvent, msg: any) {
+    e.stopPropagation();
+    deleteMenu = {
+      messageId: msg.id,
+      x: e.clientX,
+      y: e.clientY,
+      canDeleteForEveryone: canDeleteForEveryone(msg),
+    };
+  }
+
+  async function deleteMessage(messageId: string, type: 'everyone' | 'me') {
+    if (!activeDmChannelId) return;
+    deleteMenu = null;
+    try {
+      await api.delete(`/dms/${activeDmChannelId}/messages/${messageId}?type=${type}`);
+      if (type === 'everyone') {
+        messages = messages.map(m =>
+          m.id === messageId
+            ? { ...m, content: `[system] ${auth.user?.username} deleted a message` }
+            : m
+        );
+      } else {
+        messages = messages.filter(m => m.id !== messageId);
+      }
+    } catch (err: any) {
+      console.error('Failed to delete message:', err);
+    }
+  }
+
   function formatTime(iso: string) {
     const d = new Date(iso);
     const now = new Date();
@@ -782,7 +831,7 @@
                   <div class="flex-1 h-px bg-border"></div>
                 </div>
               {:else if !grouped}
-                <div class="flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 {i > 0 ? 'mt-4' : ''}">
+                <div class="relative flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group {i > 0 ? 'mt-4' : ''}">
                   <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0 mt-0.5">
                     {msg.author_username.charAt(0).toUpperCase()}
                   </div>
@@ -793,15 +842,21 @@
                     </div>
                     <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words mt-0.5">{@html renderContent(msg.content)}</p>
                   </div>
+                  <button class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  </button>
                 </div>
               {:else}
-                <div class="flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group">
+                <div class="relative flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 group">
                   <div class="w-10 flex-shrink-0 flex items-center justify-center">
                     <span class="text-[10px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity select-none">{new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words">{@html renderContent(msg.content)}</p>
                   </div>
+                  <button class="absolute right-2 top-1 opacity-0 group-hover:opacity-100 w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger/10 transition-all duration-100" onclick={(e) => openDeleteMenu(e, msg)}>
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  </button>
                 </div>
               {/if}
             {/each}
@@ -1216,6 +1271,23 @@
 {/if}
 
 <!-- Confirmation Dialog -->
+{#if deleteMenu}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="fixed inset-0 z-40" onclick={() => deleteMenu = null}></div>
+  <div class="fixed z-50 bg-bg-secondary border border-border rounded-lg shadow-xl py-1 min-w-[180px]" style="left: {deleteMenu.x}px; top: {deleteMenu.y}px; transform: translateY(-100%);">
+    {#if deleteMenu.canDeleteForEveryone}
+      <button class="w-full px-3 py-1.5 text-sm text-danger hover:bg-danger/10 text-left transition-colors flex items-center gap-2" onmousedown={() => { const id = deleteMenu!.messageId; deleteMenu = null; deleteMessage(id, 'everyone'); }}>
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Delete for everyone
+      </button>
+    {/if}
+    <button class="w-full px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover text-left transition-colors flex items-center gap-2" onmousedown={() => { const id = deleteMenu!.messageId; deleteMenu = null; deleteMessage(id, 'me'); }}>
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+      Delete for me
+    </button>
+  </div>
+{/if}
+
 {#if confirmDialog}
   <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
     <!-- svelte-ignore a11y_no_static_element_interactions -->

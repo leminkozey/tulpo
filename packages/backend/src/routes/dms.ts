@@ -198,12 +198,13 @@ dms.get("/:id/messages", async (c) => {
                 u.display_name as author_display_name, u.avatar_url as author_avatar
          FROM dm_messages m
          JOIN users u ON m.author_id = u.id
-         WHERE m.dm_channel_id = ? AND m.created_at < ?
+         LEFT JOIN dm_message_deletions dmd ON m.id = dmd.dm_message_id AND dmd.user_id = ?
+         WHERE m.dm_channel_id = ? AND m.created_at < ? AND dmd.dm_message_id IS NULL
          ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
          LIMIT ?`
       )
-      .all(channelId, before, ...(cutoff ? [cutoff] : []), limit) as any[];
+      .all(user.id, channelId, before, ...(cutoff ? [cutoff] : []), limit) as any[];
   } else {
     rows = db
       .query(
@@ -212,12 +213,13 @@ dms.get("/:id/messages", async (c) => {
                 u.display_name as author_display_name, u.avatar_url as author_avatar
          FROM dm_messages m
          JOIN users u ON m.author_id = u.id
-         WHERE m.dm_channel_id = ?
+         LEFT JOIN dm_message_deletions dmd ON m.id = dmd.dm_message_id AND dmd.user_id = ?
+         WHERE m.dm_channel_id = ? AND dmd.dm_message_id IS NULL
          ${cutoff ? "AND m.created_at <= ?" : ""}
          ORDER BY m.created_at DESC
          LIMIT ?`
       )
-      .all(channelId, ...(cutoff ? [cutoff] : []), limit) as any[];
+      .all(user.id, channelId, ...(cutoff ? [cutoff] : []), limit) as any[];
   }
 
   return c.json(rows.reverse());
@@ -703,6 +705,89 @@ dms.get("/:id/info", async (c) => {
     is_group: !!channel.is_group,
     participants,
   });
+});
+
+// Delete a message (for everyone or just for me)
+dms.delete("/:id/messages/:messageId", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const messageId = c.req.param("messageId");
+  const type = c.req.query("type") || "me";
+  const db = getDb();
+
+  // Verify user is a participant
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  // Get the message
+  const msg = db
+    .query(
+      "SELECT id, author_id, content, created_at, deleted_at FROM dm_messages WHERE id = ? AND dm_channel_id = ?"
+    )
+    .get(messageId, channelId) as any;
+
+  if (!msg) {
+    return c.json({ error: "Message not found" }, 404);
+  }
+
+  if (type === "everyone") {
+    // Already deleted for everyone
+    if (msg.deleted_at) {
+      return c.json({ error: "Already deleted" }, 400);
+    }
+
+    // Check permissions: own message < 20 min OR group owner
+    const channel = db
+      .query("SELECT is_group, owner_id FROM dm_channels WHERE id = ?")
+      .get(channelId) as any;
+
+    const isGroupOwner = channel?.is_group && channel.owner_id === user.id;
+    const isOwnMessage = msg.author_id === user.id;
+    const ageMs = Date.now() - new Date(msg.created_at).getTime();
+    const within20Min = ageMs < 20 * 60 * 1000;
+
+    if (!isGroupOwner && !(isOwnMessage && within20Min)) {
+      return c.json({ error: "Cannot delete this message" }, 403);
+    }
+
+    const systemContent = `[system] ${user.username} deleted a message`;
+    db.run(
+      `UPDATE dm_messages SET content = ?, deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+      [systemContent, messageId]
+    );
+
+    // Notify all active participants
+    const participants = db
+      .query(
+        "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'"
+      )
+      .all(channelId, user.id) as any[];
+
+    for (const p of participants) {
+      sendToUser(p.user_id, "DM_MESSAGE_DELETED", {
+        channel_id: channelId,
+        message_id: messageId,
+        deleted_by: user.username,
+        content: systemContent,
+      });
+    }
+
+    return c.json({ ok: true });
+  } else {
+    // Delete for me only
+    db.run(
+      "INSERT OR IGNORE INTO dm_message_deletions (dm_message_id, user_id) VALUES (?, ?)",
+      [messageId, user.id]
+    );
+    return c.json({ ok: true });
+  }
 });
 
 // Delete a DM from sidebar (removes completely from view)
