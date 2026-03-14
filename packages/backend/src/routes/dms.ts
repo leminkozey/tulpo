@@ -344,6 +344,27 @@ dms.post("/:id/leave", async (c) => {
     [channelId, user.id]
   );
 
+  // System message
+  const sysMsg = db
+    .query(
+      `INSERT INTO dm_messages (dm_channel_id, author_id, content)
+       VALUES (?, ?, ?)
+       RETURNING id, created_at`
+    )
+    .get(channelId, user.id, `[system] ${user.username} left the group`) as any;
+
+  const message = {
+    id: sysMsg.id,
+    content: `[system] ${user.username} left the group`,
+    created_at: sysMsg.created_at,
+    edited_at: null,
+    author_id: user.id,
+    author_username: user.username,
+    author_display_name: user.display_name,
+    author_avatar: user.avatar_url,
+    is_system: true,
+  };
+
   // Notify remaining members
   const remaining = db
     .query(
@@ -352,6 +373,7 @@ dms.post("/:id/leave", async (c) => {
     .all(channelId, user.id) as any[];
 
   for (const p of remaining) {
+    sendToUser(p.user_id, "DM_MESSAGE", { channel_id: channelId, message });
     sendToUser(p.user_id, "GROUP_MEMBER_LEFT", {
       channel_id: channelId,
       user_id: user.id,
@@ -360,6 +382,302 @@ dms.post("/:id/leave", async (c) => {
   }
 
   return c.json({ ok: true });
+});
+
+// Update group DM (name, description)
+dms.patch("/:id", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const { name, description } = await c.req.json();
+  const db = getDb();
+
+  const channel = db
+    .query("SELECT is_group, owner_id FROM dm_channels WHERE id = ?")
+    .get(channelId) as any;
+
+  if (!channel?.is_group) {
+    return c.json({ error: "Can only edit group DMs" }, 400);
+  }
+
+  // Any active participant can edit
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  if (name !== undefined) {
+    db.run("UPDATE dm_channels SET name = ? WHERE id = ?", [
+      name?.trim() || null,
+      channelId,
+    ]);
+  }
+  if (description !== undefined) {
+    db.run("UPDATE dm_channels SET description = ? WHERE id = ?", [
+      description?.trim() || null,
+      channelId,
+    ]);
+  }
+
+  // Notify all active participants
+  const participants = db
+    .query(
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'"
+    )
+    .all(channelId, user.id) as any[];
+
+  for (const p of participants) {
+    sendToUser(p.user_id, "GROUP_UPDATED", {
+      channel_id: channelId,
+      name: name?.trim(),
+      description: description?.trim(),
+      updated_by: user.username,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+// Add members to group DM
+dms.post("/:id/members", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const { user_ids } = await c.req.json();
+  const db = getDb();
+
+  const channel = db
+    .query("SELECT is_group, name FROM dm_channels WHERE id = ?")
+    .get(channelId) as any;
+
+  if (!channel?.is_group) {
+    return c.json({ error: "Can only add members to group DMs" }, 400);
+  }
+
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  if (!Array.isArray(user_ids) || user_ids.length < 1) {
+    return c.json({ error: "user_ids required" }, 400);
+  }
+
+  const added: string[] = [];
+  for (const uid of user_ids) {
+    // Check if already participant
+    const existing = db
+      .query(
+        "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+      )
+      .get(channelId, uid) as any;
+
+    if (existing) {
+      if (existing.status !== "active") {
+        db.run(
+          "UPDATE dm_participants SET status = 'active', left_at = NULL WHERE dm_channel_id = ? AND user_id = ?",
+          [channelId, uid]
+        );
+        added.push(uid);
+      }
+    } else {
+      db.run(
+        "INSERT INTO dm_participants (dm_channel_id, user_id, status) VALUES (?, ?, 'active')",
+        [channelId, uid]
+      );
+      added.push(uid);
+    }
+  }
+
+  // Insert system message
+  for (const uid of added) {
+    const addedUser = db
+      .query("SELECT username FROM users WHERE id = ?")
+      .get(uid) as any;
+
+    const sysMsg = db
+      .query(
+        `INSERT INTO dm_messages (dm_channel_id, author_id, content)
+         VALUES (?, ?, ?)
+         RETURNING id, created_at`
+      )
+      .get(
+        channelId,
+        user.id,
+        `[system] ${user.username} added ${addedUser?.username ?? "someone"} to the group`
+      ) as any;
+
+    const message = {
+      id: sysMsg.id,
+      content: `[system] ${user.username} added ${addedUser?.username ?? "someone"} to the group`,
+      created_at: sysMsg.created_at,
+      edited_at: null,
+      author_id: user.id,
+      author_username: user.username,
+      author_display_name: user.display_name,
+      author_avatar: user.avatar_url,
+      is_system: true,
+    };
+
+    // Notify all active participants
+    const allActive = db
+      .query(
+        "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND status = 'active'"
+      )
+      .all(channelId) as any[];
+
+    for (const p of allActive) {
+      if (p.user_id === user.id) continue;
+      sendToUser(p.user_id, "DM_MESSAGE", { channel_id: channelId, message });
+    }
+
+    // Notify added user about the group
+    sendToUser(uid, "GROUP_CREATED", {
+      channel_id: channelId,
+      name: channel.name,
+      created_by: user.username,
+    });
+  }
+
+  return c.json({ added }, 201);
+});
+
+// Kick member from group DM
+dms.delete("/:id/members/:userId", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const targetUserId = c.req.param("userId");
+  const db = getDb();
+
+  const channel = db
+    .query("SELECT is_group, owner_id FROM dm_channels WHERE id = ?")
+    .get(channelId) as any;
+
+  if (!channel?.is_group) {
+    return c.json({ error: "Can only kick from group DMs" }, 400);
+  }
+
+  // Only owner can kick
+  if (channel.owner_id !== user.id) {
+    return c.json({ error: "Only the group owner can kick members" }, 403);
+  }
+
+  if (targetUserId === user.id) {
+    return c.json({ error: "Cannot kick yourself" }, 400);
+  }
+
+  const target = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, targetUserId) as any;
+
+  if (!target || target.status !== "active") {
+    return c.json({ error: "User not in group" }, 404);
+  }
+
+  db.run(
+    `UPDATE dm_participants SET status = 'left', left_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+     WHERE dm_channel_id = ? AND user_id = ?`,
+    [channelId, targetUserId]
+  );
+
+  const kickedUser = db
+    .query("SELECT username FROM users WHERE id = ?")
+    .get(targetUserId) as any;
+
+  // System message
+  const sysMsg = db
+    .query(
+      `INSERT INTO dm_messages (dm_channel_id, author_id, content)
+       VALUES (?, ?, ?)
+       RETURNING id, created_at`
+    )
+    .get(
+      channelId,
+      user.id,
+      `[system] ${user.username} removed ${kickedUser?.username ?? "someone"} from the group`
+    ) as any;
+
+  const message = {
+    id: sysMsg.id,
+    content: `[system] ${user.username} removed ${kickedUser?.username ?? "someone"} from the group`,
+    created_at: sysMsg.created_at,
+    edited_at: null,
+    author_id: user.id,
+    author_username: user.username,
+    author_display_name: user.display_name,
+    author_avatar: user.avatar_url,
+    is_system: true,
+  };
+
+  // Notify remaining
+  const remaining = db
+    .query(
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND status = 'active'"
+    )
+    .all(channelId) as any[];
+
+  for (const p of remaining) {
+    if (p.user_id === user.id) continue;
+    sendToUser(p.user_id, "DM_MESSAGE", { channel_id: channelId, message });
+  }
+
+  // Notify kicked user
+  sendToUser(targetUserId, "GROUP_KICKED", {
+    channel_id: channelId,
+    kicked_by: user.username,
+  });
+
+  return c.json({ ok: true });
+});
+
+// Get group info (participants etc.)
+dms.get("/:id/info", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const db = getDb();
+
+  const channel = db
+    .query("SELECT id, name, description, is_group, owner_id FROM dm_channels WHERE id = ?")
+    .get(channelId) as any;
+
+  if (!channel) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const participant = db
+    .query(
+      "SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?"
+    )
+    .get(channelId, user.id) as any;
+
+  if (!participant) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const participants = db
+    .query(
+      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.status, dp.status as member_status
+       FROM dm_participants dp
+       JOIN users u ON dp.user_id = u.id
+       WHERE dp.dm_channel_id = ?`
+    )
+    .all(channelId) as any[];
+
+  return c.json({
+    ...channel,
+    is_group: !!channel.is_group,
+    participants,
+  });
 });
 
 // Delete a DM from sidebar (removes completely from view)
