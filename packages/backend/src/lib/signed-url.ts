@@ -8,7 +8,7 @@ export function signUrl(path: string): string {
   const sig = createHmac("sha256", env.sessionSecret)
     .update(`${path}:${expires}`)
     .digest("hex")
-    .slice(0, 40);
+    ;
   return `${path}?expires=${expires}&sig=${sig}`;
 }
 
@@ -23,7 +23,7 @@ export function verifySignedUrl(
   const expected = createHmac("sha256", env.sessionSecret)
     .update(`${path}:${expiresNum}`)
     .digest("hex")
-    .slice(0, 40);
+    ;
 
   try {
     return timingSafeEqual(Buffer.from(expected), Buffer.from(sig));

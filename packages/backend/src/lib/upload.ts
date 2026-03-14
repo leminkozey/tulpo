@@ -2,7 +2,11 @@ import sharp from "sharp";
 import { env } from "./env";
 
 const MAX_IMAGE_DIMENSION = 4000;
-const MAX_IMAGE_PIXELS = 40_000_000; // 40 megapixels
+const MAX_IMAGE_PIXELS = 16_000_000; // 16 megapixels (matches 4000x4000)
+
+// Concurrency limit for Sharp image processing
+let activeProcessing = 0;
+const MAX_CONCURRENT_PROCESSING = 4;
 
 // ===== Magic Bytes Verification =====
 
@@ -40,7 +44,13 @@ export function verifyMagicBytes(
           .join("") === "66747970"
       );
     case "audio/mpeg":
-      return hex.startsWith("fff") || hex.startsWith("494433");
+      // MP3 sync words: 0xFFFB, 0xFFF3, 0xFFF2, or ID3 tag
+      return (
+        hex.startsWith("fffb") ||
+        hex.startsWith("fff3") ||
+        hex.startsWith("fff2") ||
+        hex.startsWith("494433")
+      );
     case "audio/ogg":
       return hex.startsWith("4f676753");
     case "text/plain":
@@ -144,37 +154,47 @@ export async function processImage(
   buffer: Buffer,
   mimeType: string
 ): Promise<Buffer> {
-  const sharpOpts: sharp.SharpOptions = {
-    limitInputPixels: MAX_IMAGE_PIXELS,
-  };
-
-  if (mimeType === "image/gif") {
-    sharpOpts.animated = true;
+  // Concurrency gate: prevent DoS via parallel image processing
+  if (activeProcessing >= MAX_CONCURRENT_PROCESSING) {
+    throw new Error("Too many concurrent image processing operations");
   }
+  activeProcessing++;
 
-  let pipeline = sharp(buffer, sharpOpts)
-    .rotate() // auto-rotate based on EXIF before stripping
-    .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, {
-      fit: "inside",
-      withoutEnlargement: true,
-    });
+  try {
+    const sharpOpts: sharp.SharpOptions = {
+      limitInputPixels: MAX_IMAGE_PIXELS,
+    };
 
-  switch (mimeType) {
-    case "image/jpeg":
-      pipeline = pipeline.jpeg({ quality: 90, mozjpeg: true });
-      break;
-    case "image/png":
-      pipeline = pipeline.png({ compressionLevel: 8 });
-      break;
-    case "image/webp":
-      pipeline = pipeline.webp({ quality: 90 });
-      break;
-    case "image/gif":
-      pipeline = pipeline.gif();
-      break;
+    if (mimeType === "image/gif") {
+      sharpOpts.animated = true;
+    }
+
+    let pipeline = sharp(buffer, sharpOpts)
+      .rotate() // auto-rotate based on EXIF before stripping
+      .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, {
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+
+    switch (mimeType) {
+      case "image/jpeg":
+        pipeline = pipeline.jpeg({ quality: 90, mozjpeg: true });
+        break;
+      case "image/png":
+        pipeline = pipeline.png({ compressionLevel: 8 });
+        break;
+      case "image/webp":
+        pipeline = pipeline.webp({ quality: 90 });
+        break;
+      case "image/gif":
+        pipeline = pipeline.gif();
+        break;
+    }
+
+    return await pipeline.toBuffer();
+  } finally {
+    activeProcessing--;
   }
-
-  return pipeline.toBuffer();
 }
 
 // ===== ClamAV Virus Scanning (optional, fail-closed when configured) =====
@@ -226,14 +246,20 @@ export async function scanWithClamAV(
           },
           close() {
             clearTimeout(timeout);
-            if (response.includes("OK")) {
-              resolve({ clean: true });
-            } else {
-              const match = response.match(/stream: (.+) FOUND/);
+            const trimmed = response.trim();
+            // Check FOUND first — prevents "OK" substring in virus name from false-positive
+            if (trimmed.includes("FOUND")) {
+              const match = trimmed.match(/stream: (.+) FOUND/);
               resolve({
                 clean: false,
                 virus: match?.[1] || "unknown",
               });
+            } else if (trimmed.endsWith("OK")) {
+              resolve({ clean: true });
+            } else {
+              // Unexpected response — fail closed
+              console.error("ClamAV unexpected response:", trimmed);
+              resolve({ clean: false, virus: "unexpected_response" });
             }
           },
           error(_socket, err) {
@@ -255,6 +281,7 @@ export async function scanWithClamAV(
 
 // ===== Upload Rate Limiting =====
 
+const MAX_RATE_ENTRIES = 10_000;
 const uploadTimes = new Map<string, number[]>();
 const UPLOAD_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const UPLOAD_MAX = 50; // 50 uploads per hour
@@ -279,7 +306,7 @@ export function checkUploadRateLimit(
   return { allowed: true, retryAfterMs: 0 };
 }
 
-// Cleanup old entries every 10 minutes
+// Cleanup old entries every 10 minutes, cap total entries
 setInterval(() => {
   const now = Date.now();
   for (const [key, times] of uploadTimes) {
@@ -288,6 +315,15 @@ setInterval(() => {
       uploadTimes.delete(key);
     } else {
       uploadTimes.set(key, recent);
+    }
+  }
+  // Hard cap on map size to prevent memory exhaustion
+  if (uploadTimes.size > MAX_RATE_ENTRIES) {
+    const excess = uploadTimes.size - MAX_RATE_ENTRIES;
+    const keys = uploadTimes.keys();
+    for (let i = 0; i < excess; i++) {
+      const key = keys.next().value;
+      if (key) uploadTimes.delete(key);
     }
   }
 }, 10 * 60 * 1000);

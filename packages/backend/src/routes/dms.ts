@@ -13,8 +13,9 @@ import {
   scanWithClamAV,
   checkUploadRateLimit,
 } from "../lib/upload";
-import { join } from "path";
-import { mkdir } from "fs/promises";
+import { join, resolve } from "path";
+import { mkdir, unlink } from "fs/promises";
+import { randomBytes } from "crypto";
 
 type AuthEnv = {
   Variables: {
@@ -47,6 +48,16 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: numbe
   recent.push(now);
   return { allowed: true, retryAfterMs: 0 };
 }
+
+// Cleanup stale message rate limit entries every 30 seconds
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, times] of messageTimes) {
+    const recent = times.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length === 0) messageTimes.delete(key);
+    else messageTimes.set(key, recent);
+  }
+}, 30_000);
 
 // List all DM channels for the current user (for sidebar)
 dms.get("/", async (c) => {
@@ -304,6 +315,13 @@ dms.post("/:id/messages", async (c) => {
   // Validate file if present
   let fileBuffer: Buffer | null = null;
   if (file) {
+    // Rate limit FIRST — before any CPU/memory-intensive processing
+    const uploadRate = checkUploadRateLimit(user.id);
+    if (!uploadRate.allowed) {
+      const retryMin = Math.ceil(uploadRate.retryAfterMs / 60_000);
+      return c.json({ error: `Upload limit reached, try again in ${retryMin} min` }, 429);
+    }
+
     if (!ALLOWED_MIME_TYPES.includes(file.type)) {
       return c.json({ error: "File type not allowed" }, 400);
     }
@@ -343,13 +361,6 @@ dms.post("/:id/messages", async (c) => {
         console.warn("Image processing failed:", err);
         return c.json({ error: "Invalid or corrupted image" }, 400);
       }
-    }
-
-    // Upload rate limit
-    const uploadRate = checkUploadRateLimit(user.id);
-    if (!uploadRate.allowed) {
-      const retryMin = Math.ceil(uploadRate.retryAfterMs / 60_000);
-      return c.json({ error: `Upload limit reached, try again in ${retryMin} min` }, 429);
     }
   }
 
@@ -408,13 +419,20 @@ dms.post("/:id/messages", async (c) => {
   if (file && fileBuffer) {
     const finalSize = fileBuffer.length;
 
-    // Check storage quota
-    const userRow = db
-      .query("SELECT storage_used FROM users WHERE id = ?")
-      .get(user.id) as any;
-    const storageUsed = userRow?.storage_used ?? 0;
-    if (storageUsed + finalSize > env.uploadQuotaBytes) {
-      const usedMB = Math.round(storageUsed / 1024 / 1024);
+    // Atomic storage quota check+update (prevents race condition)
+    const quotaResult = db
+      .query(
+        `UPDATE users SET storage_used = storage_used + ?
+         WHERE id = ? AND storage_used + ? <= ?
+         RETURNING storage_used`
+      )
+      .get(finalSize, user.id, finalSize, env.uploadQuotaBytes) as any;
+
+    if (!quotaResult) {
+      const userRow = db
+        .query("SELECT storage_used FROM users WHERE id = ?")
+        .get(user.id) as any;
+      const usedMB = Math.round((userRow?.storage_used ?? 0) / 1024 / 1024);
       const quotaMB = Math.round(env.uploadQuotaBytes / 1024 / 1024);
       return c.json(
         { error: `Storage quota exceeded (${usedMB}/${quotaMB} MB used)` },
@@ -422,22 +440,30 @@ dms.post("/:id/messages", async (c) => {
       );
     }
 
+    // Sanitize: only allow alphanumeric channel IDs (prevent path traversal)
+    if (!/^[a-f0-9]+$/.test(channelId)) {
+      return c.json({ error: "Invalid channel" }, 400);
+    }
+
     const uploadDir = join("data", "uploads", "dm", channelId);
+
+    // Verify resolved path stays within allowed directory
+    const allowedBase = resolve("data/uploads");
+    if (!resolve(uploadDir).startsWith(allowedBase + "/")) {
+      return c.json({ error: "Invalid path" }, 400);
+    }
+
     await mkdir(uploadDir, { recursive: true });
 
-    const ext = file.name.split(".").pop() || "bin";
-    const storedFilename = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${ext}`;
+    // Sanitize file extension (only alphanumeric, prevent path traversal)
+    const rawExt = file.name.split(".").pop() || "bin";
+    const ext = rawExt.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "bin";
+    const storedFilename = `${Date.now()}_${randomBytes(8).toString("hex")}.${ext}`;
     const filePath = join(uploadDir, storedFilename);
     const rawUrl = `/uploads/dm/${channelId}/${storedFilename}`;
 
     // Write processed buffer (re-encoded for images, original for others)
     await Bun.write(filePath, fileBuffer);
-
-    // Update user storage usage
-    db.run("UPDATE users SET storage_used = storage_used + ? WHERE id = ?", [
-      finalSize,
-      user.id,
-    ]);
 
     const att = db
       .query(
@@ -1018,6 +1044,39 @@ dms.delete("/:id/messages/:messageId", async (c) => {
 
     if (!isGroupOwner && !(isOwnMessage && within20Min)) {
       return c.json({ error: "Cannot delete this message" }, 403);
+    }
+
+    // Clean up attachments: delete files from disk, free storage quota
+    const messageAttachments = db
+      .query(
+        "SELECT stored_filename, size, dm_message_id FROM dm_attachments WHERE dm_message_id = ?"
+      )
+      .all(messageId) as any[];
+
+    if (messageAttachments.length > 0) {
+      let totalFreed = 0;
+      for (const att of messageAttachments) {
+        const filePath = join(
+          "data",
+          "uploads",
+          "dm",
+          channelId,
+          att.stored_filename
+        );
+        try {
+          await unlink(filePath);
+        } catch {
+          // File may already be gone — that's fine
+        }
+        totalFreed += att.size;
+      }
+      db.run("DELETE FROM dm_attachments WHERE dm_message_id = ?", [messageId]);
+      if (totalFreed > 0) {
+        db.run(
+          "UPDATE users SET storage_used = MAX(0, storage_used - ?) WHERE id = ?",
+          [totalFreed, msg.author_id]
+        );
+      }
     }
 
     const systemContent = `[system] ${user.username} deleted a message`;
