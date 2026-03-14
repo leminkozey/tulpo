@@ -78,6 +78,14 @@
 
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
+  // Mention autocomplete
+  let mentionActive = $state(false);
+  let mentionQuery = $state('');
+  let mentionIndex = $state(0);
+  let mentionStartPos = $state(0);
+  let chatParticipants = $state<{ id: string; username: string; display_name?: string }[]>([]);
+  let messageInputEl: HTMLInputElement | undefined = $state();
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -259,7 +267,14 @@
     const { [channelId]: _, ...rest } = unreadCounts;
     unreadCounts = rest;
     try {
-      messages = await api.get<any[]>(`/dms/${channelId}/messages`);
+      const [msgs, info] = await Promise.all([
+        api.get<any[]>(`/dms/${channelId}/messages`),
+        api.get<any>(`/dms/${channelId}/info`),
+      ]);
+      messages = msgs;
+      chatParticipants = (info.participants ?? [])
+        .filter((p: any) => p.member_status === 'active')
+        .map((p: any) => ({ id: p.id, username: p.username, display_name: p.display_name }));
       await scrollToBottom();
     } catch (err: any) {
       console.error('Failed to open group DM:', err);
@@ -451,6 +466,19 @@
       .filter((item): item is NonNullable<typeof item> => item !== null)
   );
 
+  // Mention suggestions — filter mentionable users by query
+  let mentionSuggestions = $derived(() => {
+    if (!mentionActive) return [];
+    const q = mentionQuery.toLowerCase();
+    const users = activeDmUser?.is_group
+      ? chatParticipants.filter(p => p.id !== auth.user?.id)
+      : activeDmUser ? [{ id: activeDmUser.id, username: activeDmUser.username, display_name: activeDmUser.display_name }] : [];
+    if (!q) return users.slice(0, 8);
+    return users.filter(u =>
+      u.username.toLowerCase().includes(q) || (u.display_name?.toLowerCase().includes(q) ?? false)
+    ).slice(0, 8);
+  });
+
   // Derived
   let onlineFriends = $derived(
     friendsStore.friends.filter(f => f.user.status === 'online' || f.user.status === 'idle' || f.user.status === 'dnd')
@@ -472,6 +500,57 @@
     const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     // Replace @username with styled span
     return escaped.replace(/@(\w+)/g, '<span class="text-accent bg-accent/10 rounded px-0.5">@$1</span>');
+  }
+
+  function handleMentionInput() {
+    if (!messageInputEl) return;
+    const val = messageInputEl.value;
+    const pos = messageInputEl.selectionStart ?? 0;
+    // Find the last @ before cursor that's not preceded by a word char
+    const before = val.slice(0, pos);
+    const match = before.match(/(^|[^@\w])@(\w*)$/);
+    if (match) {
+      mentionActive = true;
+      mentionQuery = match[2];
+      mentionStartPos = pos - match[2].length - 1; // position of @
+      mentionIndex = 0;
+    } else {
+      mentionActive = false;
+    }
+  }
+
+  function insertMention(username: string) {
+    if (!messageInputEl) return;
+    const before = messageInput.slice(0, mentionStartPos);
+    const after = messageInput.slice((messageInputEl.selectionStart ?? mentionStartPos) );
+    messageInput = before + '@' + username + ' ' + after;
+    mentionActive = false;
+    // Focus back and set cursor position
+    tick().then(() => {
+      if (messageInputEl) {
+        const newPos = before.length + 1 + username.length + 1;
+        messageInputEl.focus();
+        messageInputEl.setSelectionRange(newPos, newPos);
+      }
+    });
+  }
+
+  function handleMentionKeydown(e: KeyboardEvent) {
+    const suggestions = mentionSuggestions();
+    if (!mentionActive || suggestions.length === 0) return;
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      e.preventDefault();
+      insertMention(suggestions[mentionIndex].username);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionIndex = mentionIndex <= 0 ? suggestions.length - 1 : mentionIndex - 1;
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionIndex = mentionIndex >= suggestions.length - 1 ? 0 : mentionIndex + 1;
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      mentionActive = false;
+    }
   }
 
   function formatTime(iso: string) {
@@ -710,10 +789,37 @@
         {#if isRateLimited}
           <div class="text-center text-xs text-warning py-2">Slow down — you can send again in {rateLimitRemaining}s</div>
         {/if}
-        <form onsubmit={(e) => { e.preventDefault(); sendMessage(); }} class="relative">
+        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative">
+          <!-- Mention autocomplete popup -->
+          {#if mentionActive && mentionSuggestions().length > 0}
+            <div class="absolute bottom-full mb-1 left-0 w-64 bg-bg-secondary border border-border rounded-lg shadow-lg overflow-hidden z-20">
+              <div class="px-3 py-1.5 border-b border-border">
+                <span class="text-[11px] font-semibold text-text-muted uppercase tracking-wider">Members</span>
+              </div>
+              {#each mentionSuggestions() as user, i (user.id)}
+                <button
+                  type="button"
+                  class="w-full flex items-center gap-2.5 px-3 py-1.5 text-left transition-colors duration-75 {i === mentionIndex ? 'bg-accent/15' : 'hover:bg-bg-hover/50'}"
+                  onmousedown={(e) => { e.preventDefault(); insertMention(user.username); }}
+                  onmouseenter={() => mentionIndex = i}
+                >
+                  <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent flex-shrink-0">
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                  <span class="text-sm text-text-primary truncate">{user.display_name || user.username}</span>
+                  {#if user.display_name && user.display_name !== user.username}
+                    <span class="text-xs text-text-muted truncate">{user.username}</span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
           <input
             type="text"
             bind:value={messageInput}
+            bind:this={messageInputEl}
+            oninput={handleMentionInput}
+            onkeydown={handleMentionKeydown}
             disabled={isRateLimited}
             placeholder={isRateLimited ? 'Too fast...' : `Message @${activeDmUser.username}`}
             class="w-full bg-bg-tertiary text-text-primary rounded-lg px-4 py-2.5 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors disabled:opacity-50"
