@@ -846,14 +846,13 @@
         >Cancel</button>
         {#if selectedForGroup.length === 1}
           <button
-            class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors"
+            class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors cursor-pointer"
             onclick={() => startDmFromPopup(selectedForGroup[0])}
           >Open DM</button>
         {:else if selectedForGroup.length > 1}
           <button
-            class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors disabled:opacity-50"
-            disabled={!groupName.trim() || groupCreating}
-            onclick={createGroup}
+            class="px-4 py-2 text-sm rounded-lg font-medium transition-colors cursor-pointer {!groupName.trim() || groupCreating ? 'bg-accent/50 text-bg-primary/50' : 'bg-accent text-bg-primary hover:bg-accent-hover'}"
+            onclick={() => createGroup()}
           >{groupCreating ? 'Creating...' : 'Create Group'}</button>
         {/if}
       </div>
