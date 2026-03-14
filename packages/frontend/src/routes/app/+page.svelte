@@ -63,6 +63,16 @@
   // Hidden friend IDs (hidden from sidebar)
   let hiddenUserIds = $state<Set<string>>(new Set());
 
+  // Group settings panel
+  let showGroupSettings = $state(false);
+  let groupInfo = $state<any>(null);
+  let editGroupName = $state('');
+  let editGroupDesc = $state('');
+
+  // Add members to group popup
+  let showAddMembersPopup = $state(false);
+  let addMembersSelected = $state<string[]>([]);
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
@@ -171,13 +181,80 @@
     } catch { /* ignore */ }
   }
 
+  async function openGroupSettings() {
+    if (!activeDmChannelId) return;
+    try {
+      groupInfo = await api.get<any>(`/dms/${activeDmChannelId}/info`);
+      editGroupName = groupInfo.name || '';
+      editGroupDesc = groupInfo.description || '';
+      showGroupSettings = true;
+    } catch (err: any) {
+      console.error('Failed to load group info:', err);
+    }
+  }
+
+  async function saveGroupSettings() {
+    if (!activeDmChannelId) return;
+    try {
+      await api.patch(`/dms/${activeDmChannelId}`, {
+        name: editGroupName,
+        description: editGroupDesc,
+      });
+      // Update local
+      const ch = dmChannels.find(c => c.id === activeDmChannelId);
+      if (ch) {
+        ch.name = editGroupName.trim();
+        ch.description = editGroupDesc.trim();
+        dmChannels = [...dmChannels];
+      }
+      if (activeDmUser?.is_group) {
+        activeDmUser = { ...activeDmUser, username: editGroupName.trim(), display_name: editGroupName.trim() };
+      }
+      showGroupSettings = false;
+    } catch (err: any) {
+      console.error('Failed to save group settings:', err);
+    }
+  }
+
+  async function kickMember(userId: string) {
+    if (!activeDmChannelId) return;
+    const member = groupInfo?.participants?.find((p: any) => p.id === userId);
+    confirmDialog = {
+      title: 'Remove Member',
+      message: `Remove ${member?.display_name || member?.username || 'this user'} from the group?`,
+      danger: true,
+      onConfirm: async () => {
+        await api.delete(`/dms/${activeDmChannelId}/members/${userId}`);
+        groupInfo = { ...groupInfo, participants: groupInfo.participants.filter((p: any) => p.id !== userId) };
+        confirmDialog = null;
+      }
+    };
+  }
+
+  async function addMembersToGroup() {
+    if (!activeDmChannelId || addMembersSelected.length === 0) return;
+    try {
+      await api.post(`/dms/${activeDmChannelId}/members`, { user_ids: addMembersSelected });
+      showAddMembersPopup = false;
+      addMembersSelected = [];
+      // Reload group info
+      groupInfo = await api.get<any>(`/dms/${activeDmChannelId}/info`);
+    } catch (err: any) {
+      console.error('Failed to add members:', err);
+    }
+  }
+
   async function openGroupDm(channelId: string) {
     const ch = dmChannels.find(c => c.id === channelId);
     if (!ch) return;
-    activeDmUser = { id: channelId, username: ch.name, display_name: ch.name, is_group: true, status: 'online' };
+    activeDmUser = { id: channelId, username: ch.name, display_name: ch.name, is_group: true, owner_id: ch.owner_id, status: 'online' };
     activeDmChannelId = channelId;
     currentView = 'dm';
     messagesLoading = true;
+    showGroupSettings = false;
+    // Clear unread for this channel
+    const { [channelId]: _, ...rest } = unreadCounts;
+    unreadCounts = rest;
     try {
       messages = await api.get<any[]>(`/dms/${channelId}/messages`);
       await scrollToBottom();
@@ -218,17 +295,28 @@
       unsubs.push(wsClient.on('GROUP_MEMBER_LEFT', (_data: any) => {
         loadDmChannels();
       }));
+      unsubs.push(wsClient.on('GROUP_UPDATED', (_data: any) => {
+        loadDmChannels();
+      }));
+      unsubs.push(wsClient.on('GROUP_KICKED', (data: any) => {
+        loadDmChannels();
+        if (activeDmChannelId === data.channel_id) goToFriends();
+      }));
       unsubs.push(wsClient.on('DM_MESSAGE', (data: any) => {
         const authorId = data.message?.author_id;
+        const channelId = data.channel_id;
         if (authorId) {
           dmActivity = { ...dmActivity, [authorId]: Date.now() };
         }
-        if (data.channel_id === activeDmChannelId) {
+        if (channelId === activeDmChannelId) {
           messages = [...messages, data.message];
           scrollToBottom();
-        } else if (authorId) {
-          // Not in this chat — increment unread
-          unreadCounts = { ...unreadCounts, [authorId]: (unreadCounts[authorId] ?? 0) + 1 };
+        } else {
+          // Not in this chat — increment unread by channel_id (groups) or author_id (1:1)
+          const key = channelId || authorId;
+          if (key) {
+            unreadCounts = { ...unreadCounts, [key]: (unreadCounts[key] ?? 0) + 1 };
+          }
         }
       }));
     });
@@ -355,6 +443,13 @@
       .toSorted((a, b) => (dmActivity[b.user.id] ?? 0) - (dmActivity[a.user.id] ?? 0))
   );
 
+  function renderContent(content: string): string {
+    // Escape HTML first
+    const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    // Replace @username with styled span
+    return escaped.replace(/@(\w+)/g, '<span class="text-accent bg-accent/10 rounded px-0.5">@$1</span>');
+  }
+
   function formatTime(iso: string) {
     const d = new Date(iso);
     const now = new Date();
@@ -422,7 +517,9 @@
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           </div>
           <span class="text-sm text-text-secondary group-hover:text-text-primary truncate flex-1">{channel.name}</span>
-          {#if channel.my_status === 'left'}
+          {#if unreadCounts[channel.id]}
+            <span class="bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unreadCounts[channel.id]}</span>
+          {:else if channel.my_status === 'left'}
             <span class="text-[10px] text-text-muted flex-shrink-0">Left</span>
           {/if}
         </button>
@@ -483,10 +580,21 @@
       <!-- DM Chat View -->
       <div class="h-12 flex-shrink-0 flex items-center px-4 border-b border-border gap-3">
         <div class="relative">
-          <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent">{activeDmUser.username.charAt(0).toUpperCase()}</div>
-          <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-primary" class:bg-success={activeDmUser.status === 'online'} class:bg-text-muted={activeDmUser.status !== 'online'}></div>
+          {#if activeDmUser.is_group}
+            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center">
+              <svg class="w-3.5 h-3.5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+          {:else}
+            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent">{activeDmUser.username.charAt(0).toUpperCase()}</div>
+            <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-primary" class:bg-success={activeDmUser.status === 'online'} class:bg-text-muted={activeDmUser.status !== 'online'}></div>
+          {/if}
         </div>
-        <span class="text-[15px] font-semibold text-text-primary">{activeDmUser.display_name || activeDmUser.username}</span>
+        <span class="text-[15px] font-semibold text-text-primary flex-1">{activeDmUser.display_name || activeDmUser.username}</span>
+        {#if activeDmUser.is_group}
+          <button onclick={openGroupSettings} class="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150" aria-label="Group settings">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </button>
+        {/if}
       </div>
 
       <!-- Messages -->
@@ -507,11 +615,18 @@
           <div>
             {#each messages as msg, i (msg.id)}
               {@const prevMsg = i > 0 ? messages[i - 1] : null}
-              {@const sameAuthor = prevMsg?.author_id === msg.author_id}
+              {@const isSystem = msg.content?.startsWith('[system]') || msg.is_system}
+              {@const sameAuthor = !isSystem && prevMsg?.author_id === msg.author_id && !prevMsg?.content?.startsWith('[system]')}
               {@const timeDiff = prevMsg ? new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() : Infinity}
               {@const grouped = sameAuthor && timeDiff < 300000}
 
-              {#if !grouped}
+              {#if isSystem}
+                <div class="flex items-center gap-2 px-2 py-1 {i > 0 ? 'mt-2' : ''}">
+                  <div class="flex-1 h-px bg-border"></div>
+                  <span class="text-[12px] text-text-muted italic whitespace-nowrap">{msg.content.replace('[system] ', '')}</span>
+                  <div class="flex-1 h-px bg-border"></div>
+                </div>
+              {:else if !grouped}
                 <div class="flex items-start gap-4 px-2 py-0.5 hover:bg-bg-message-hover rounded-md transition-colors duration-100 {i > 0 ? 'mt-4' : ''}">
                   <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0 mt-0.5">
                     {msg.author_username.charAt(0).toUpperCase()}
@@ -521,7 +636,7 @@
                       <span class="text-[15px] font-semibold text-text-primary">{msg.author_display_name || msg.author_username}</span>
                       <span class="text-[11px] text-text-muted">{formatTime(msg.created_at)}</span>
                     </div>
-                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words mt-0.5">{msg.content}</p>
+                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words mt-0.5">{@html renderContent(msg.content)}</p>
                   </div>
                 </div>
               {:else}
@@ -530,7 +645,7 @@
                     <span class="text-[10px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity select-none">{new Date(msg.created_at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div class="flex-1 min-w-0">
-                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words">{msg.content}</p>
+                    <p class="text-[15px] text-text-secondary leading-[1.375rem] break-words">{@html renderContent(msg.content)}</p>
                   </div>
                 </div>
               {/if}
@@ -737,18 +852,20 @@
         <button
           class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer"
           onmousedown={() => {
+            const id = chId;
+            const name = chName;
             closeContextMenu();
             confirmDialog = {
               title: 'Leave Group',
-              message: `Are you sure you want to leave "${chName}"? You can still see the chat history.`,
+              message: `Are you sure you want to leave "${name}"? You can still see the chat history.`,
               danger: true,
               onConfirm: async () => {
-                await api.post(`/dms/${chId}/leave`);
-                const ch = dmChannels.find(c => c.id === chId);
+                await api.post(`/dms/${id}/leave`);
+                const ch = dmChannels.find(c => c.id === id);
                 if (ch) ch.my_status = 'left';
                 dmChannels = [...dmChannels];
                 confirmDialog = null;
-                if (activeDmChannelId === chId) goToFriends();
+                if (activeDmChannelId === id) goToFriends();
               }
             };
           }}
@@ -757,14 +874,103 @@
       <button
         class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
         onmousedown={() => {
+          const id = chId;
           closeContextMenu();
-          api.delete(`/dms/${chId}`).then(() => {
-            dmChannels = dmChannels.filter(c => c.id !== chId);
-            if (activeDmChannelId === chId) goToFriends();
+          api.delete(`/dms/${id}`).then(() => {
+            dmChannels = dmChannels.filter(c => c.id !== id);
+            if (activeDmChannelId === id) goToFriends();
           });
         }}
       >Delete</button>
     {/if}
+  </div>
+{/if}
+
+<!-- Group Settings Panel -->
+{#if showGroupSettings && groupInfo}
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="fixed inset-0" onclick={() => showGroupSettings = false}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-md w-full mx-4 shadow-xl relative z-10 max-h-[80vh] overflow-y-auto">
+      <h3 class="text-lg font-semibold text-text-primary mb-4">Group Settings</h3>
+
+      <div class="space-y-3 mb-6">
+        <div>
+          <label class="text-xs text-text-muted uppercase tracking-wide mb-1 block">Name</label>
+          <input type="text" bind:value={editGroupName} class="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors" />
+        </div>
+        <div>
+          <label class="text-xs text-text-muted uppercase tracking-wide mb-1 block">Description</label>
+          <input type="text" bind:value={editGroupDesc} placeholder="No description" class="w-full bg-bg-tertiary text-text-primary rounded-lg px-3 py-2 text-sm border border-border focus:border-accent focus:outline-none placeholder:text-text-muted transition-colors" />
+        </div>
+        <button onclick={saveGroupSettings} class="bg-accent text-bg-primary font-medium px-4 py-2 rounded-lg text-sm hover:bg-accent-hover transition-colors cursor-pointer">Save Changes</button>
+      </div>
+
+      <div class="border-t border-border pt-4">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-sm font-semibold text-text-primary">Members ({groupInfo.participants?.filter((p: any) => p.member_status === 'active').length})</h4>
+          <button onclick={() => { showAddMembersPopup = true; addMembersSelected = []; }} class="text-xs text-accent hover:text-accent-hover transition-colors cursor-pointer">+ Add</button>
+        </div>
+        <div class="space-y-1">
+          {#each groupInfo.participants?.filter((p: any) => p.member_status === 'active') as member (member.id)}
+            <div class="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-bg-hover/50 transition-colors">
+              <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+                {member.username.charAt(0).toUpperCase()}
+              </div>
+              <span class="text-sm text-text-secondary flex-1">{member.display_name || member.username}</span>
+              {#if member.id === groupInfo.owner_id}
+                <span class="text-[10px] text-accent bg-accent/10 rounded px-1.5 py-0.5">Owner</span>
+              {:else if auth.user?.id === groupInfo.owner_id}
+                <button onclick={() => kickMember(member.id)} class="text-xs text-danger hover:text-danger/80 transition-colors cursor-pointer">Kick</button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+
+      <div class="flex justify-end mt-4">
+        <button onclick={() => showGroupSettings = false} class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border cursor-pointer">Close</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Add Members to Group -->
+{#if showAddMembersPopup}
+  <div class="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="fixed inset-0" onclick={() => showAddMembersPopup = false}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl relative z-10">
+      <h3 class="text-lg font-semibold text-text-primary mb-3">Add Members</h3>
+      <div class="max-h-48 overflow-y-auto space-y-1 mb-4">
+        {#each friendsStore.friends.filter(f => !groupInfo?.participants?.some((p: any) => p.id === f.user.id && p.member_status === 'active')) as friend (friend.id)}
+          <button
+            class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left cursor-pointer {addMembersSelected.includes(friend.user.id) ? 'bg-accent/10' : 'hover:bg-bg-hover/50'}"
+            onclick={() => {
+              if (addMembersSelected.includes(friend.user.id)) {
+                addMembersSelected = addMembersSelected.filter(id => id !== friend.user.id);
+              } else {
+                addMembersSelected = [...addMembersSelected, friend.user.id];
+              }
+            }}
+          >
+            <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+              {friend.user.username.charAt(0).toUpperCase()}
+            </div>
+            <span class="text-sm text-text-secondary flex-1">{friend.user.display_name || friend.user.username}</span>
+            {#if addMembersSelected.includes(friend.user.id)}
+              <div class="w-5 h-5 rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                <svg class="w-3 h-3 text-bg-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
+            {/if}
+          </button>
+        {/each}
+      </div>
+      <div class="flex justify-end gap-3">
+        <button onclick={() => showAddMembersPopup = false} class="px-4 py-2 text-sm rounded-lg bg-bg-tertiary text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors border border-border cursor-pointer">Cancel</button>
+        <button onclick={addMembersToGroup} class="px-4 py-2 text-sm rounded-lg font-medium bg-accent text-bg-primary hover:bg-accent-hover transition-colors cursor-pointer {addMembersSelected.length === 0 ? 'opacity-50' : ''}">Add ({addMembersSelected.length})</button>
+      </div>
+    </div>
   </div>
 {/if}
 
