@@ -497,7 +497,7 @@
     {#each unreadDmItems as item (item.id)}
       <button
         aria-label="Open {item.name}"
-        class="relative w-12 h-12 rounded-2xl bg-bg-secondary hover:bg-bg-hover hover:rounded-xl transition-all duration-200 flex items-center justify-center group"
+        class="relative w-12 h-12 rounded-2xl bg-accent/15 hover:bg-accent/25 hover:rounded-xl transition-all duration-200 flex items-center justify-center group"
         onclick={() => {
           if (item.type === 'group') {
             openGroupDm(item.id);
@@ -507,9 +507,9 @@
         }}
       >
         {#if item.type === 'group'}
-          <svg class="w-5 h-5 text-text-secondary group-hover:text-text-primary transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <svg class="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
         {:else}
-          <span class="text-sm font-bold text-text-secondary group-hover:text-text-primary transition-colors">{item.initial}</span>
+          <span class="text-sm font-bold text-accent">{item.initial}</span>
         {/if}
         <span class="absolute -top-1 -right-1 bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{item.count}</span>
       </button>
@@ -529,8 +529,8 @@
 
   <!-- Channel Sidebar -->
   <div class="hidden sm:flex w-60 flex-shrink-0 bg-bg-secondary flex-col border-r border-border">
-    <div class="p-2 border-b border-border">
-      <div class="relative">
+    <div class="h-12 flex items-center px-2 border-b border-border">
+      <div class="relative w-full">
         <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" bind:value={dmSearch} placeholder="Find a conversation" class="w-full bg-bg-primary text-text-primary text-xs rounded-md pl-8 pr-3 py-1.5 placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent/50" />
       </div>
