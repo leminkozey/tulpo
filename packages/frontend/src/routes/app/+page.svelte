@@ -1075,12 +1075,11 @@
       {/if}
 
       <!-- Hidden groups to restore -->
-      {@const hiddenGroups = dmChannels.filter(c => c.is_group && c.my_status === 'hidden')}
-      {#if hiddenGroups.length > 0}
+      {#if dmChannels.filter(c => c.is_group && c.my_status === 'hidden').length > 0}
         <div class="mb-4">
           <h4 class="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-2">Hidden Groups</h4>
           <div class="space-y-1">
-            {#each hiddenGroups as group (group.id)}
+            {#each dmChannels.filter(c => c.is_group && c.my_status === 'hidden') as group (group.id)}
               <button
                 class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-bg-hover/50 transition-colors text-left cursor-pointer"
                 onclick={async () => {
@@ -1126,7 +1125,7 @@
             {/if}
           </button>
         {/each}
-        {#if friendsStore.friends.length === 0 && hiddenGroups.length === 0}
+        {#if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group && c.my_status === 'hidden').length === 0}
           <p class="text-sm text-text-muted text-center py-4">No friends to message</p>
         {/if}
       </div>
