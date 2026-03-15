@@ -922,6 +922,25 @@
 
   const GIPHY_URL_RE = /https:\/\/media\d*\.giphy\.com\/media\/[^\s]+\.gif(?:\?[^\s]*)?/g;
 
+  // Detect emoji-only messages (1-5 emojis, no text) for jumbo display
+  function getEmojiOnlyCount(content: string): number {
+    if (!content?.trim()) return 0;
+    const trimmed = content.trim();
+    // Strip all emoji-related characters + whitespace — if anything remains, it's not emoji-only
+    const withoutEmoji = trimmed.replace(/[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D\s]/gu, '');
+    if (withoutEmoji.length > 0) return 0;
+    const matches = trimmed.match(/\p{Extended_Pictographic}/gu);
+    if (!matches) return 0;
+    return matches.length >= 1 && matches.length <= 5 ? matches.length : 0;
+  }
+
+  function getEmojiSize(count: number): string {
+    if (count === 1) return '3rem';
+    if (count === 2) return '2.75rem';
+    if (count === 3) return '2.5rem';
+    return '2rem';
+  }
+
   function isGifOnly(content: string): boolean {
     if (!content) return false;
     const withoutGifs = content.replace(GIPHY_URL_RE, '').replace(/\s+/g, '').trim();
@@ -1362,6 +1381,7 @@
               {@const gifOnly = isGifOnly(msg.content)}
               {@const prevGifOnly = prevMsg && isGifOnly(prevMsg.content)}
               {@const gifChain = gifOnly && prevGifOnly && sameAuthor && timeDiff < 20000}
+              {@const emojiCount = !gifOnly && !isSystem ? getEmojiOnlyCount(msg.content) : 0}
               {#if isMuted}
                 <!-- Muted user message -->
                 {#if !sameAuthor || timeDiff >= 300000}
@@ -1420,6 +1440,8 @@
                                 <img src={chainGifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
                               {/each}
                             </div>
+                          {:else if emojiCount > 0}
+                            <p class="mt-1 leading-none" style="font-size: {getEmojiSize(emojiCount)}">{msg.content}</p>
                           {:else}
                             <p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
                           {/if}
@@ -1502,6 +1524,8 @@
                                 <img src={chainGifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
                               {/each}
                             </div>
+                          {:else if emojiCount > 0}
+                            <p class="leading-none" style="font-size: {getEmojiSize(emojiCount)}">{msg.content}</p>
                           {:else}
                             <p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
                           {/if}
