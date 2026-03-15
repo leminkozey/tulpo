@@ -32,31 +32,11 @@
   --radius-full: 9999px;
 }
 
-/* CSS Custom Properties for runtime theming */
-:root {
-  --bg-primary: #191919;
-  --bg-secondary: #1e1e1e;
-  --bg-tertiary: #2a2a2a;
-  --bg-hover: #333333;
-  --bg-active: #3a3a3a;
-  --bg-message-hover: #1f1f1f;
-  --text-primary: #ececec;
-  --text-secondary: #a0a0a0;
-  --text-muted: #666666;
-  --accent: #14b8a6;
-  --accent-hover: #2dd4bf;
-  --accent-muted: rgba(20, 184, 166, 0.1);
-  --border: #2e2e2e;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --warning: #f59e0b;
-}
-
 /* Frost Theme */
 [data-theme="frost"] {
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --accent-muted: rgba(99, 102, 241, 0.1);
+  --color-accent: #6366f1;
+  --color-accent-hover: #818cf8;
+  --color-accent-muted: rgba(99, 102, 241, 0.1);
 }
 
 /* Global base */
@@ -67,8 +47,8 @@ html, body {
 }
 
 body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
 }
 
 /* Scrollbar styling */
@@ -79,11 +59,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-hover);
+  background: var(--color-bg-hover);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bg-active);
+  background: var(--color-bg-active);
 }
 
 @keyframes typing-bounce {

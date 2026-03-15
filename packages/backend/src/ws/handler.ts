@@ -51,10 +51,6 @@ function broadcastPresence(userId: string, status: string) {
   }
 }
 
-export function getOnlineUserIds(): string[] {
-  return Array.from(connections.keys());
-}
-
 function send(ws: TulpoWebSocket, message: WsMessage) {
   ws.send(JSON.stringify(message));
 }
@@ -65,15 +61,6 @@ export function sendToUser(userId: string, event: string, data: unknown) {
   const message: WsMessage = { op: WsOpCode.DISPATCH, t: event, d: data };
   for (const ws of userConns) {
     send(ws, message);
-  }
-}
-
-export function broadcastToAll(event: string, data: unknown) {
-  const message: WsMessage = { op: WsOpCode.DISPATCH, t: event, d: data };
-  for (const [, sockets] of connections) {
-    for (const ws of sockets) {
-      send(ws, message);
-    }
   }
 }
 

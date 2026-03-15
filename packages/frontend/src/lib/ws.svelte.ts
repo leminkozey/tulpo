@@ -147,7 +147,6 @@ function createWsClient() {
     connect,
     disconnect,
     on,
-    send,
     sendEvent,
   };
 }

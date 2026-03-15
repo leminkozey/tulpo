@@ -31,11 +31,4 @@ export function getDb(): Database {
   return db;
 }
 
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
-}
-
 export { runMigrations } from "./migrate";
