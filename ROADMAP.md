@@ -3,6 +3,7 @@
 ## Known Bugs
 
 - [ ] @mention tag background not vertically centered around text (padding/alignment issue in `renderContent`)
+- [ ] Emoji reactions not perfectly vertically centered in pills (later fix)
 
 ## Chat Features
 
