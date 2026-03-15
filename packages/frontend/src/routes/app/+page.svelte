@@ -5,6 +5,7 @@
   import { friendsStore } from '$lib/stores/friends.svelte';
   import { wsClient } from '$lib/ws.svelte';
   import { api } from '$lib/api';
+  import { voiceStore } from '$lib/stores/voice.svelte';
   import { emojiCategories } from '$lib/emoji-data';
 
   let unsubs: (() => void)[] = [];
@@ -94,6 +95,12 @@
 
   // External link warning
   let externalLinkWarning = $state<{ url: string; label: string } | null>(null);
+
+  // Voice call UI state
+  let showMicDevices = $state(false);
+  let showSpeakerDevices = $state(false);
+  let voiceVolumeMenu = $state<{ userId: string; username: string; x: number; y: number } | null>(null);
+  let voiceVolumeMenuRef: HTMLDivElement | undefined = $state();
 
   // Status picker
   let showStatusPicker = $state(false);
@@ -427,6 +434,11 @@
         showStatusPicker = false;
       }
     }
+    if (showMicDevices) showMicDevices = false;
+    if (showSpeakerDevices) showSpeakerDevices = false;
+    if (voiceVolumeMenu && voiceVolumeMenuRef && !voiceVolumeMenuRef.contains(e.target as Node)) {
+      voiceVolumeMenu = null;
+    }
   }
 
   async function hideDm(channelId: string) {
@@ -633,6 +645,8 @@
       wsClient.connect();
       friendsStore.loadAll();
       loadDmChannels();
+      voiceStore.setupListeners();
+      voiceStore.enumerateDevices();
 
       unsubs.push(wsClient.on('READY', () => {}));
       unsubs.push(wsClient.on('FRIEND_REQUEST', (data) => {
@@ -786,6 +800,7 @@
 
   onDestroy(() => {
     unsubs.forEach(fn => fn());
+    voiceStore.cleanup();
     wsClient.disconnect();
   });
 
@@ -1546,6 +1561,11 @@
           {/if}
         </div>
         <span class="text-[15px] font-semibold text-text-primary flex-1">{activeDmUser.display_name || activeDmUser.username}</span>
+        {#if !voiceStore.activeCall}
+          <button onclick={() => voiceStore.initiateCall(activeDmChannelId!)} class="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-success hover:bg-bg-hover transition-all duration-150" aria-label="Start call">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          </button>
+        {/if}
         {#if activeDmUser.is_group && activeDmUser.owner_id === auth.user?.id}
           <button onclick={openGroupSettings} class="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150" aria-label="Group settings">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -3010,5 +3030,125 @@
         >Open Link</button>
       </div>
     </div>
+  </div>
+{/if}
+
+<!-- Incoming Call Overlay -->
+{#if voiceStore.incomingCall}
+  {@const inCall = voiceStore.incomingCall}
+  <div class="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center">
+    <div class="bg-bg-secondary border border-border rounded-2xl p-8 w-[340px] text-center shadow-2xl">
+      <div class="relative inline-block mb-4">
+        <div class="absolute inset-0 rounded-full bg-success/20 animate-ping"></div>
+        <div class="relative">
+          {#if inCall.caller.avatar_type !== 'color' && inCall.caller.avatar_url}
+            <img src={inCall.caller.avatar_url} alt="" class="w-20 h-20 rounded-full object-cover border-3 border-success/50" />
+          {:else}
+            <div class="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold text-white border-3 border-success/50" style="background-color: {inCall.caller.avatar_color || '#14b8a6'}">{(inCall.caller.display_name || inCall.caller.username).charAt(0).toUpperCase()}</div>
+          {/if}
+        </div>
+      </div>
+      <h3 class="text-lg font-bold text-text-primary">{inCall.caller.display_name || inCall.caller.username}</h3>
+      <p class="text-sm text-text-muted mt-1">Incoming voice call...</p>
+      <div class="flex gap-4 justify-center mt-6">
+        <button onclick={() => voiceStore.declineIncomingCall()} class="w-14 h-14 rounded-full bg-danger hover:bg-danger/80 flex items-center justify-center text-white transition-colors shadow-lg" aria-label="Decline">
+          <svg class="w-6 h-6 rotate-[135deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        </button>
+        <button onclick={() => voiceStore.acceptIncomingCall()} class="w-14 h-14 rounded-full bg-success hover:bg-success/80 flex items-center justify-center text-white transition-colors shadow-lg" aria-label="Accept">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<!-- Active Call Overlay -->
+{#if voiceStore.activeCall?.status === 'active'}
+  {@const activeVoiceCall = voiceStore.activeCall}
+  <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] bg-bg-secondary border border-border rounded-2xl shadow-2xl p-4 min-w-[320px] max-w-[520px]">
+    <div class="flex items-center justify-center gap-4 mb-4 flex-wrap">
+      {#each activeVoiceCall.participants as p}
+        {@const isSpeaking = voiceStore.speakingUsers.has(p.user_id)}
+        <div class="flex flex-col items-center gap-1 relative" oncontextmenu={(e) => { e.preventDefault(); voiceVolumeMenu = { userId: p.user_id, username: p.user.display_name || p.user.username, x: e.clientX, y: e.clientY }; }}>
+          <div class="relative transition-transform duration-150" class:scale-110={isSpeaking}>
+            <div class="rounded-full transition-all duration-150 {isSpeaking ? 'ring-3 ring-success' : ''}">
+              {#if p.user.avatar_type !== 'color' && p.user.avatar_url}
+                <img src={p.user.avatar_url} alt="" class="w-16 h-16 rounded-full object-cover" />
+              {:else}
+                <div class="w-16 h-16 rounded-full flex items-center justify-center text-lg font-bold text-white" style="background-color: {p.user.avatar_color || '#14b8a6'}">{(p.user.display_name || p.user.username).charAt(0).toUpperCase()}</div>
+              {/if}
+            </div>
+            {#if p.is_muted}
+              <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-danger flex items-center justify-center">
+                <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path></svg>
+              </div>
+            {/if}
+          </div>
+          <span class="text-xs text-text-secondary truncate max-w-[80px]">{p.user.display_name || p.user.username}</span>
+        </div>
+      {/each}
+    </div>
+    <div class="flex items-center justify-center gap-3">
+      <div class="relative">
+        <button onclick={() => voiceStore.toggleMute()} class="w-11 h-11 rounded-full flex items-center justify-center transition-colors {voiceStore.isMuted ? 'bg-danger text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover'}" aria-label="Mute">
+          {#if voiceStore.isMuted}
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.49-.34 2.18"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          {:else}
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          {/if}
+        </button>
+        <button onclick={() => { voiceStore.enumerateDevices(); showMicDevices = !showMicDevices; showSpeakerDevices = false; }} class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors">
+          <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        {#if showMicDevices}
+          <div class="absolute bottom-14 left-1/2 -translate-x-1/2 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 min-w-[220px] z-10">
+            <p class="px-3 py-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Input Device</p>
+            {#each voiceStore.availableDevices.filter((d: MediaDeviceInfo) => d.kind === 'audioinput') as device}
+              <button onclick={() => { voiceStore.switchInputDevice(device.deviceId); showMicDevices = false; }} class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors truncate" class:text-accent={voiceStore.inputDeviceId === device.deviceId}>{device.label || 'Microphone'}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="relative">
+        <button onclick={() => voiceStore.toggleDeafen()} class="w-11 h-11 rounded-full flex items-center justify-center transition-colors {voiceStore.isDeafened ? 'bg-danger text-white' : 'bg-bg-tertiary text-text-secondary hover:bg-bg-hover'}" aria-label="Deafen">
+          {#if voiceStore.isDeafened}
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="1" y1="1" x2="23" y2="23"></line><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path></svg>
+          {:else}
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>
+          {/if}
+        </button>
+        <button onclick={() => { voiceStore.enumerateDevices(); showSpeakerDevices = !showSpeakerDevices; showMicDevices = false; }} class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-bg-tertiary border border-border flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors">
+          <svg class="w-2.5 h-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        {#if showSpeakerDevices}
+          <div class="absolute bottom-14 left-1/2 -translate-x-1/2 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 min-w-[220px] z-10">
+            <p class="px-3 py-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Output Device</p>
+            {#each voiceStore.availableDevices.filter((d: MediaDeviceInfo) => d.kind === 'audiooutput') as device}
+              <button onclick={() => { voiceStore.switchOutputDevice(device.deviceId); showSpeakerDevices = false; }} class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors truncate" class:text-accent={voiceStore.outputDeviceId === device.deviceId}>{device.label || 'Speaker'}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <button onclick={() => voiceStore.leave()} class="w-11 h-11 rounded-full bg-danger hover:bg-danger/80 flex items-center justify-center text-white transition-colors" aria-label="Hang up">
+        <svg class="w-5 h-5 rotate-[135deg]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Rejoin bar -->
+{#if voiceStore.canRejoin && !voiceStore.activeCall}
+  <div class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] bg-bg-secondary border border-border rounded-xl shadow-xl px-5 py-3 flex items-center gap-4">
+    <span class="text-sm text-text-secondary">You left the call.</span>
+    <button onclick={() => voiceStore.rejoin()} class="px-4 py-1.5 bg-success hover:bg-success/80 text-white text-sm font-medium rounded-lg transition-colors">Rejoin</button>
+  </div>
+{/if}
+
+<!-- Voice Volume Context Menu -->
+{#if voiceVolumeMenu}
+  <div class="fixed bg-bg-secondary border border-border rounded-lg shadow-xl p-3 min-w-[200px] z-[70]" style="left: {voiceVolumeMenu.x}px; top: {voiceVolumeMenu.y - 80}px;" bind:this={voiceVolumeMenuRef}>
+    <p class="text-xs text-text-muted mb-2">{voiceVolumeMenu.username} — Volume</p>
+    <input type="range" min="0" max="200" value={voiceStore.userVolumes[voiceVolumeMenu.userId] ?? 100} oninput={(e) => voiceStore.setUserVolume(voiceVolumeMenu!.userId, Number((e.target as HTMLInputElement).value))} class="w-full accent-accent" />
+    <p class="text-[11px] text-text-muted text-right mt-1">{voiceStore.userVolumes[voiceVolumeMenu.userId] ?? 100}%</p>
   </div>
 {/if}
