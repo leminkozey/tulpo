@@ -2905,9 +2905,9 @@
 <!-- Profile Card Modal -->
 {#if profileCard && !profileCard.loading}
   <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={closeProfileCard}>
-    <div class="relative w-[340px] bg-bg-secondary rounded-2xl overflow-hidden border border-border shadow-2xl" onclick={(e) => e.stopPropagation()}>
+    <div class="relative w-[420px] bg-bg-secondary rounded-2xl overflow-hidden border border-border shadow-2xl" onclick={(e) => e.stopPropagation()}>
       <!-- Banner -->
-      <div class="h-[100px] relative">
+      <div class="h-[130px] relative">
         {#if profileCard.banner_url}
           <img src={profileCard.banner_url} alt="Banner" class="w-full h-full object-cover" />
         {:else}
@@ -2916,12 +2916,12 @@
       </div>
 
       <!-- Avatar -->
-      <div class="relative px-4">
-        <div class="absolute -top-10">
+      <div class="relative px-5">
+        <div class="absolute -top-12">
           {#if profileCard.avatar_type !== 'color' && profileCard.avatar_url}
-            <img src={profileCard.avatar_url} alt="Avatar" class="w-[80px] h-[80px] rounded-full object-cover border-[5px] border-bg-secondary" />
+            <img src={profileCard.avatar_url} alt="Avatar" class="w-[96px] h-[96px] rounded-full object-cover border-[5px] border-bg-secondary" />
           {:else}
-            <div class="w-[80px] h-[80px] rounded-full flex items-center justify-center text-2xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {profileCard.avatar_color || '#14b8a6'}">
+            <div class="w-[96px] h-[96px] rounded-full flex items-center justify-center text-3xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {profileCard.avatar_color || '#14b8a6'}">
               {(profileCard.display_name || profileCard.username || '?').charAt(0).toUpperCase()}
             </div>
           {/if}
@@ -2931,9 +2931,9 @@
       </div>
 
       <!-- Info -->
-      <div class="pt-12 px-4 pb-4">
-        <h3 class="text-lg font-bold text-text-primary leading-tight">{profileCard.display_name || profileCard.username}</h3>
-        <p class="text-sm text-text-secondary">{profileCard.username}{#if profileCard.pronouns}<span class="text-text-muted"> &middot; {profileCard.pronouns}</span>{/if}</p>
+      <div class="pt-14 px-5 pb-5">
+        <h3 class="text-xl font-bold text-text-primary leading-tight">{profileCard.display_name || profileCard.username}</h3>
+        <p class="text-sm text-text-secondary mt-0.5">{profileCard.username}{#if profileCard.pronouns}<span class="text-text-muted"> &middot; {profileCard.pronouns}</span>{/if}</p>
 
         {#if profileCard.bio}
           <div class="mt-3 pt-3 border-t border-border">
