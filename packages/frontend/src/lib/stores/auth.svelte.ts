@@ -47,8 +47,9 @@ function createAuthStore() {
         if (err && typeof err === 'object' && 'status' in err && ((err as any).status === 401 || (err as any).status === 403)) {
           clearSession();
         } else {
-          // Network error or server issue — keep token, assume still valid
+          // Network error or server issue — keep token, allow retry
           token = savedToken;
+          initPromise = null; // allow re-init on next navigation
           console.warn('[auth] init failed, keeping session:', err);
         }
       }
