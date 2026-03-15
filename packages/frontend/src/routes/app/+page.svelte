@@ -8,7 +8,6 @@
   import { emojiCategories } from '$lib/emoji-data';
 
   let unsubs: (() => void)[] = [];
-  let showUserMenu = $state(false);
 
   // View state: 'friends' or 'dm'
   type View = 'friends' | 'dm';
@@ -43,7 +42,6 @@
   let drafts = $state<Record<string, string>>({});
   let messagesLoading = $state(false);
   let sendingMessage = $state(false);
-  let rateLimitedUntil = $state(0);
   let rateLimitTimer: ReturnType<typeof setInterval> | null = null;
   let messagesContainer: HTMLDivElement | undefined = $state();
 
@@ -968,7 +966,7 @@
   );
 
   // Mention suggestions — filter mentionable users by query
-  let mentionSuggestions = $derived(() => {
+  let mentionSuggestions = $derived.by(() => {
     if (!mentionActive) return [];
     const q = mentionQuery.toLowerCase();
     const isGroup = activeDmUser?.is_group;
@@ -1166,7 +1164,7 @@
       cancelReply();
       return;
     }
-    const suggestions = mentionSuggestions();
+    const suggestions = mentionSuggestions;
     if (!mentionActive || suggestions.length === 0) return;
     if (e.key === 'Tab' || e.key === 'Enter') {
       e.preventDefault();
@@ -1228,8 +1226,6 @@
   function cancelReply() {
     replyingTo = null;
     editingMessageId = null;
-    for (const t of typingUsers.values()) clearTimeout(t.timeout);
-    typingUsers = new Map();
   }
 
   function canEdit(msg: any): boolean {
@@ -1828,30 +1824,30 @@
             </div>
 
             <!-- Search -->
-            {#if pickerTab !== 'emoji'}
-              <div class="px-3 py-2 flex-shrink-0">
-                <input
-                  type="text"
-                  bind:this={pickerSearchEl}
-                  bind:value={pickerSearch}
-                  oninput={onPickerSearch}
-                  placeholder={pickerTab === 'emoji' ? 'Search emoji...' : pickerTab === 'gif' ? 'Search GIFs...' : 'Search stickers...'}
-                  class="w-full bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none"
-                />
-              </div>
-            {/if}
+            <div class="px-3 py-2 flex-shrink-0">
+              <input
+                type="text"
+                bind:this={pickerSearchEl}
+                bind:value={pickerSearch}
+                oninput={onPickerSearch}
+                placeholder={pickerTab === 'emoji' ? 'Search emoji...' : pickerTab === 'gif' ? 'Search GIFs...' : 'Search stickers...'}
+                class="w-full bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none"
+              />
+            </div>
 
             <!-- Content -->
             <div class="flex-1 overflow-y-auto overflow-x-hidden p-2">
               {#if pickerTab === 'emoji'}
                 <!-- Emoji grid -->
                 {#each emojiCategories as category, ci}
-                  {@const filteredEmojis = pickerSearch ? category.emojis.filter(() => true) : category.emojis}
-                  {#if !pickerSearch || ci > 0}
+                  {@const filteredEmojis = pickerSearch
+                    ? category.emojis.filter(e => e.includes(pickerSearch) || category.name.toLowerCase().includes(pickerSearch.toLowerCase()))
+                    : category.emojis}
+                  {#if filteredEmojis.length > 0}
                     <div class="mb-2">
                       <p class="text-[11px] font-semibold text-text-muted uppercase tracking-wide px-1 py-1">{category.name}</p>
                       <div class="grid grid-cols-9 gap-0">
-                        {#each (pickerSearch ? category.emojis : category.emojis) as emoji}
+                        {#each filteredEmojis as emoji}
                           <button
                             type="button"
                             class="w-10 h-10 flex items-center justify-center text-[22px] rounded-md hover:bg-bg-hover transition-colors cursor-pointer"
@@ -1962,14 +1958,14 @@
             {/each}
           </div>
         {/if}
-        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }}>
+        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions.length > 0) return; sendMessage(); }}>
           <!-- Mention autocomplete popup -->
-          {#if mentionActive && mentionSuggestions().length > 0}
+          {#if mentionActive && mentionSuggestions.length > 0}
             <div class="absolute bottom-full mb-1 left-0 w-72 bg-bg-secondary border border-border rounded-lg shadow-xl overflow-hidden z-20">
               <div class="px-3 py-2 border-b border-border">
                 <span class="text-[11px] font-semibold text-text-muted uppercase tracking-wider">Members</span>
               </div>
-              {#each mentionSuggestions() as user, i (user.id)}
+              {#each mentionSuggestions as user, i (user.id)}
                 <button
                   type="button"
                   class="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors duration-75 {i === mentionIndex ? 'bg-accent/12 text-text-primary' : 'hover:bg-bg-hover/50'}"
@@ -2341,7 +2337,7 @@
         const mid = fileContextMenu!.messageId;
         const fname = fileContextMenu!.filename;
         closeFileContextMenu();
-        openReportDialog('file', mid, fname);
+        openReportDialog('file', mid, { filename: fname });
       }}
     >
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
