@@ -167,3 +167,25 @@ export interface DmAttachment {
   size: number;
   url: string;
 }
+
+// ===== Voice Calls =====
+export interface VoiceCallParticipant {
+  user_id: string;
+  user: PublicUser;
+  is_muted: boolean;
+  is_deafened: boolean;
+}
+
+export interface VoiceCall {
+  id: string;
+  dm_channel_id: string;
+  status: "ringing" | "active" | "ended";
+  started_by: string;
+  participants: VoiceCallParticipant[];
+}
+
+export interface IceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+}

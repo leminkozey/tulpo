@@ -4,6 +4,10 @@ import type { TulpoWebSocket } from "./types";
 import { validateSession } from "../lib/auth";
 import { getDb } from "@tulpo/db";
 import { signUrl } from "../lib/signed-url";
+import {
+  initiateCall, acceptCall, declineCall, leaveCall, rejoinCall,
+  toggleMute, toggleDeafen, handleUserDisconnect, getCallById, getIceServers,
+} from "./voiceState";
 
 // Connection pool: userId -> Set of WebSocket connections
 const connections = new Map<string, Set<TulpoWebSocket>>();
@@ -134,6 +138,84 @@ export const wsHandler = {
               });
             }
           }
+
+          // Voice call events
+          if (eventType === "CALL_INITIATE" && payload?.channel_id) {
+            const result = initiateCall(payload.channel_id, ws.data.userId);
+            if (result.error) {
+              sendToUser(ws.data.userId, "CALL_ERROR", { error: result.error });
+            }
+          }
+          if (eventType === "CALL_ACCEPT" && payload?.call_id) {
+            const result = acceptCall(payload.call_id, ws.data.userId);
+            if (result.error) {
+              sendToUser(ws.data.userId, "CALL_ERROR", { error: result.error });
+            }
+          }
+          if (eventType === "CALL_DECLINE" && payload?.call_id) {
+            declineCall(payload.call_id, ws.data.userId);
+          }
+          if (eventType === "CALL_LEAVE" && payload?.call_id) {
+            leaveCall(payload.call_id, ws.data.userId);
+          }
+          if (eventType === "CALL_REJOIN" && payload?.call_id) {
+            const result = rejoinCall(payload.call_id, ws.data.userId);
+            if (result.error) {
+              sendToUser(ws.data.userId, "CALL_ERROR", { error: result.error });
+            }
+          }
+          if (eventType === "CALL_TOGGLE_MUTE" && payload?.call_id) {
+            toggleMute(payload.call_id, ws.data.userId);
+          }
+          if (eventType === "CALL_TOGGLE_DEAFEN" && payload?.call_id) {
+            toggleDeafen(payload.call_id, ws.data.userId);
+          }
+
+          // WebRTC signaling relay
+          if (eventType === "RTC_OFFER" && payload?.call_id && payload?.target_user_id && payload?.sdp) {
+            const call = getCallById(payload.call_id);
+            if (call?.participants.has(ws.data.userId)) {
+              sendToUser(payload.target_user_id, "RTC_OFFER", {
+                call_id: payload.call_id,
+                from_user_id: ws.data.userId,
+                sdp: payload.sdp,
+              });
+            }
+          }
+          if (eventType === "RTC_ANSWER" && payload?.call_id && payload?.target_user_id && payload?.sdp) {
+            const call = getCallById(payload.call_id);
+            if (call?.participants.has(ws.data.userId)) {
+              sendToUser(payload.target_user_id, "RTC_ANSWER", {
+                call_id: payload.call_id,
+                from_user_id: ws.data.userId,
+                sdp: payload.sdp,
+              });
+            }
+          }
+          if (eventType === "RTC_ICE_CANDIDATE" && payload?.call_id && payload?.target_user_id && payload?.candidate) {
+            const call = getCallById(payload.call_id);
+            if (call?.participants.has(ws.data.userId)) {
+              sendToUser(payload.target_user_id, "RTC_ICE_CANDIDATE", {
+                call_id: payload.call_id,
+                from_user_id: ws.data.userId,
+                candidate: payload.candidate,
+              });
+            }
+          }
+          if (eventType === "VOICE_SPEAKING" && payload?.call_id && typeof payload?.speaking === "boolean") {
+            const call = getCallById(payload.call_id);
+            if (call?.participants.has(ws.data.userId)) {
+              for (const uid of call.participants.keys()) {
+                if (uid !== ws.data.userId) {
+                  sendToUser(uid, "VOICE_SPEAKING", {
+                    call_id: payload.call_id,
+                    user_id: ws.data.userId,
+                    speaking: payload.speaking,
+                  });
+                }
+              }
+            }
+          }
           break;
         }
 
@@ -173,6 +255,7 @@ export const wsHandler = {
 
   close(ws: TulpoWebSocket) {
     if (ws.data.userId) {
+      handleUserDisconnect(ws.data.userId);
       removeConnection(ws.data.userId, ws);
     }
   },

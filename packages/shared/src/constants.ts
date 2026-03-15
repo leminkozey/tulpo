@@ -23,3 +23,9 @@ export const BLOCKED_MIME_TYPES = [
   "application/javascript",
   "text/javascript",
 ] as const;
+
+// Voice calls
+export const CALL_RING_TIMEOUT_MS = 30_000; // 30s ringing before auto-cancel
+export const CALL_REJOIN_TIMEOUT_MS = 180_000; // 3 min rejoin window
+export const CALL_MAX_PARTICIPANTS = 8; // Mesh topology limit
+export const VAD_THRESHOLD_DEFAULT = 0.02; // Voice activity detection default
