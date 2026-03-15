@@ -281,6 +281,134 @@ friends.get("/", async (c) => {
   );
 });
 
+// Block a user
+friends.post("/block/:userId", async (c) => {
+  const user = c.get("user");
+  const targetId = c.req.param("userId");
+  const db = getDb();
+
+  if (targetId === user.id) return c.json({ error: "Cannot block yourself" }, 400);
+
+  // Check target exists
+  const target = db.query("SELECT id FROM users WHERE id = ?").get(targetId);
+  if (!target) return c.json({ error: "User not found" }, 404);
+
+  // Insert block (ignore if already blocked)
+  db.run(
+    "INSERT OR IGNORE INTO user_blocks (user_id, blocked_id) VALUES (?, ?)",
+    [user.id, targetId]
+  );
+
+  // Also remove friendship if exists
+  db.run(
+    "DELETE FROM friends WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",
+    [user.id, targetId, targetId, user.id]
+  );
+
+  sendToUser(targetId, "FRIEND_REMOVED", { user_id: user.id });
+
+  return c.json({ ok: true });
+});
+
+// Unblock a user
+friends.delete("/block/:userId", async (c) => {
+  const user = c.get("user");
+  const targetId = c.req.param("userId");
+  const db = getDb();
+
+  db.run(
+    "DELETE FROM user_blocks WHERE user_id = ? AND blocked_id = ?",
+    [user.id, targetId]
+  );
+
+  return c.json({ ok: true });
+});
+
+// Get blocked users
+friends.get("/blocked", async (c) => {
+  const user = c.get("user");
+  const db = getDb();
+
+  const rows = db.query(
+    `SELECT b.id, b.created_at,
+            u.id as user_id, u.username, u.display_name, u.avatar_url
+     FROM user_blocks b
+     JOIN users u ON b.blocked_id = u.id
+     WHERE b.user_id = ?
+     ORDER BY b.created_at DESC`
+  ).all(user.id) as any[];
+
+  return c.json(rows.map(r => ({
+    id: r.id,
+    user: { id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url },
+    created_at: r.created_at,
+  })));
+});
+
+// Mute a user
+friends.post("/mute/:userId", async (c) => {
+  const user = c.get("user");
+  const targetId = c.req.param("userId");
+  const db = getDb();
+
+  if (targetId === user.id) return c.json({ error: "Cannot mute yourself" }, 400);
+
+  db.run(
+    "INSERT OR IGNORE INTO user_mutes (user_id, muted_id) VALUES (?, ?)",
+    [user.id, targetId]
+  );
+
+  return c.json({ ok: true });
+});
+
+// Unmute a user
+friends.delete("/mute/:userId", async (c) => {
+  const user = c.get("user");
+  const targetId = c.req.param("userId");
+  const db = getDb();
+
+  db.run(
+    "DELETE FROM user_mutes WHERE user_id = ? AND muted_id = ?",
+    [user.id, targetId]
+  );
+
+  return c.json({ ok: true });
+});
+
+// Get muted users
+friends.get("/muted", async (c) => {
+  const user = c.get("user");
+  const db = getDb();
+
+  const rows = db.query(
+    "SELECT muted_id FROM user_mutes WHERE user_id = ?"
+  ).all(user.id) as any[];
+
+  return c.json(rows.map(r => r.muted_id));
+});
+
+// Report a user
+friends.post("/report/:userId", async (c) => {
+  const user = c.get("user");
+  const targetId = c.req.param("userId");
+  const db = getDb();
+
+  if (targetId === user.id) return c.json({ error: "Cannot report yourself" }, 400);
+
+  const target = db.query("SELECT id FROM users WHERE id = ?").get(targetId);
+  if (!target) return c.json({ error: "User not found" }, 404);
+
+  const body = await c.req.json<{ reason?: string }>();
+
+  db.run(
+    `INSERT INTO reports (reporter_id, dm_channel_id, message_id, type, reason)
+     VALUES (?, '', ?, 'user', ?)`,
+    [user.id, targetId, body.reason || ""]
+  );
+
+  return c.json({ ok: true });
+});
+
 function pickPublic(u: PublicUser): PublicUser {
   return {
     id: u.id,

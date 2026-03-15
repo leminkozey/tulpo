@@ -10,6 +10,8 @@ function createFriendsStore() {
   let incoming = $state<IncomingFriendRequest[]>([]);
   let outgoing = $state<OutgoingFriendRequest[]>([]);
   let loading = $state(false);
+  let blockedIds = $state<Set<string>>(new Set());
+  let mutedIds = $state<Set<string>>(new Set());
 
   async function loadFriends() {
     friends = await api.get<FriendWithUser[]>("/friends");
@@ -23,10 +25,20 @@ function createFriendsStore() {
     outgoing = await api.get<OutgoingFriendRequest[]>("/friends/outgoing");
   }
 
+  async function loadBlocked() {
+    const rows = await api.get<any[]>("/friends/blocked");
+    blockedIds = new Set(rows.map(r => r.user.id));
+  }
+
+  async function loadMuted() {
+    const ids = await api.get<string[]>("/friends/muted");
+    mutedIds = new Set(ids);
+  }
+
   async function loadAll() {
     loading = true;
     try {
-      await Promise.all([loadFriends(), loadIncoming(), loadOutgoing()]);
+      await Promise.all([loadFriends(), loadIncoming(), loadOutgoing(), loadBlocked(), loadMuted()]);
     } finally {
       loading = false;
     }
@@ -63,6 +75,35 @@ function createFriendsStore() {
   async function removeFriend(id: string) {
     await api.delete(`/friends/${id}`);
     await loadFriends();
+  }
+
+  async function blockUser(userId: string) {
+    await api.post(`/friends/block/${userId}`);
+    blockedIds = new Set([...blockedIds, userId]);
+    friends = friends.filter(f => f.user.id !== userId);
+  }
+
+  async function unblockUser(userId: string) {
+    await api.delete(`/friends/block/${userId}`);
+    blockedIds = new Set([...blockedIds].filter(id => id !== userId));
+  }
+
+  async function muteUser(userId: string) {
+    await api.post(`/friends/mute/${userId}`);
+    mutedIds = new Set([...mutedIds, userId]);
+  }
+
+  async function unmuteUser(userId: string) {
+    await api.delete(`/friends/mute/${userId}`);
+    mutedIds = new Set([...mutedIds].filter(id => id !== userId));
+  }
+
+  function isBlocked(userId: string) {
+    return blockedIds.has(userId);
+  }
+
+  function isMuted(userId: string) {
+    return mutedIds.has(userId);
   }
 
   // Handle WS events
@@ -103,12 +144,20 @@ function createFriendsStore() {
     get outgoing() { return outgoing; },
     get loading() { return loading; },
     get pendingCount() { return incoming.length; },
+    get blockedIds() { return blockedIds; },
+    get mutedIds() { return mutedIds; },
     loadAll,
     sendRequest,
     acceptRequest,
     rejectRequest,
     cancelRequest,
     removeFriend,
+    blockUser,
+    unblockUser,
+    muteUser,
+    unmuteUser,
+    isBlocked,
+    isMuted,
     handleFriendRequest,
     handleFriendAccepted,
     handleFriendRemoved,
