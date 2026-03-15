@@ -129,7 +129,8 @@
     const existing = msg?.reactions?.find((r: any) => r.emoji === emoji);
     const alreadyReacted = existing?.reacted;
 
-    // Optimistic update
+    // Optimistic update with snapshot for revert
+    const snapshot = messages;
     messages = messages.map(m => {
       if (m.id !== messageId) return m;
       const reactions = [...(m.reactions || [])];
@@ -171,7 +172,7 @@
         await api.put(`/dms/${activeDmChannelId}/messages/${messageId}/reactions`, { emoji });
       }
     } catch {
-      // Revert on error - refetch would be better but this is simpler
+      messages = snapshot;
     }
     closeReactionPicker();
   }
@@ -678,6 +679,7 @@
             const reactions = [...(m.reactions || [])];
             const idx = reactions.findIndex((r: any) => r.emoji === data.emoji);
             if (idx >= 0) {
+              if (reactions[idx].users.some((u: any) => u.id === data.user_id)) return m;
               reactions[idx] = {
                 ...reactions[idx],
                 count: reactions[idx].count + 1,
@@ -702,6 +704,7 @@
             const reactions = [...(m.reactions || [])];
             const idx = reactions.findIndex((r: any) => r.emoji === data.emoji);
             if (idx >= 0) {
+              if (!reactions[idx].users.some((u: any) => u.id === data.user_id)) return m;
               reactions[idx] = {
                 ...reactions[idx],
                 count: reactions[idx].count - 1,
@@ -1083,6 +1086,10 @@
     // Text without GIF URLs
     const textOnly = content.replace(GIPHY_URL_RE, '').replace(/\n+/g, '\n').trim();
 
+    function escapeAttr(s: string): string {
+      return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
     let html = '';
 
     // Render text part with mentions
@@ -1100,7 +1107,7 @@
     // Render GIFs as a flex row
     if (gifUrls.length > 0) {
       const imgs = gifUrls.map(url =>
-        `<img src="${url}" alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />`
+        `<img src="${escapeAttr(url)}" alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />`
       ).join('');
       html += `${textOnly ? '<br/>' : ''}<div class="flex flex-wrap gap-1.5 mt-1">${imgs}</div>`;
     }

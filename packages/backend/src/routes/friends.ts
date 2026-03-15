@@ -353,6 +353,9 @@ friends.post("/mute/:userId", async (c) => {
 
   if (targetId === user.id) return c.json({ error: "Cannot mute yourself" }, 400);
 
+  const target = db.query("SELECT id FROM users WHERE id = ?").get(targetId);
+  if (!target) return c.json({ error: "User not found" }, 404);
+
   db.run(
     "INSERT OR IGNORE INTO user_mutes (user_id, muted_id) VALUES (?, ?)",
     [user.id, targetId]
@@ -401,8 +404,8 @@ friends.post("/report/:userId", async (c) => {
   const body = await c.req.json<{ reason?: string }>();
 
   db.run(
-    `INSERT INTO reports (reporter_id, dm_channel_id, message_id, type, reason)
-     VALUES (?, '', ?, 'user', ?)`,
+    `INSERT INTO reports (reporter_id, reported_user_id, type, reason)
+     VALUES (?, ?, 'user', ?)`,
     [user.id, targetId, body.reason || ""]
   );
 

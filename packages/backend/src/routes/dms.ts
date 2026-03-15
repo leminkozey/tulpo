@@ -33,6 +33,27 @@ const RATE_LIMIT_WINDOW_MS = 5000;
 const RATE_LIMIT_MAX = 5;
 const messageTimes = new Map<string, number[]>();
 
+// Reaction rate limiter: max 10 reactions per 10 seconds per user
+const REACTION_RATE_LIMIT_WINDOW_MS = 10000;
+const REACTION_RATE_LIMIT_MAX = 10;
+const reactionTimes = new Map<string, number[]>();
+
+function checkReactionRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const times = reactionTimes.get(userId) ?? [];
+  const recent = times.filter((t) => now - t < REACTION_RATE_LIMIT_WINDOW_MS);
+  reactionTimes.set(userId, recent);
+  if (recent.length >= REACTION_RATE_LIMIT_MAX) {
+    const retryAfterMs = REACTION_RATE_LIMIT_WINDOW_MS - (now - recent[0]);
+    return { allowed: false, retryAfterMs };
+  }
+  recent.push(now);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
+// Emoji validation: only Unicode emoji sequences allowed
+const EMOJI_RE = /^[\p{Extended_Pictographic}\p{Emoji_Component}\uFE0F\u200D]+$/u;
+
 function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
   const now = Date.now();
   const times = messageTimes.get(userId) ?? [];
@@ -49,13 +70,18 @@ function checkRateLimit(userId: string): { allowed: boolean; retryAfterMs: numbe
   return { allowed: true, retryAfterMs: 0 };
 }
 
-// Cleanup stale message rate limit entries every 30 seconds
+// Cleanup stale rate limit entries every 30 seconds
 setInterval(() => {
   const now = Date.now();
   for (const [key, times] of messageTimes) {
     const recent = times.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
     if (recent.length === 0) messageTimes.delete(key);
     else messageTimes.set(key, recent);
+  }
+  for (const [key, times] of reactionTimes) {
+    const recent = times.filter((t) => now - t < REACTION_RATE_LIMIT_WINDOW_MS);
+    if (recent.length === 0) reactionTimes.delete(key);
+    else reactionTimes.set(key, recent);
   }
 }, 30_000);
 
@@ -160,6 +186,12 @@ dms.post("/open", async (c) => {
   }
 
   const db = getDb();
+
+  // Block check
+  const blocked = db.query(
+    "SELECT 1 FROM user_blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)"
+  ).get(user.id, user_id, user_id, user.id);
+  if (blocked) return c.json({ error: "Cannot open DM with this user" }, 403);
 
   // Check if 1:1 DM channel already exists between these two users (exclude groups)
   const existing = db
@@ -1194,8 +1226,14 @@ dms.put("/:id/messages/:messageId/reactions", async (c) => {
   const { emoji } = await c.req.json();
   const db = getDb();
 
-  if (!emoji || typeof emoji !== "string" || emoji.length > 32) {
+  if (!emoji || typeof emoji !== "string" || !EMOJI_RE.test(emoji) || [...emoji].length > 10) {
     return c.json({ error: "Invalid emoji" }, 400);
+  }
+
+  // Rate limit
+  const rl = checkReactionRateLimit(user.id);
+  if (!rl.allowed) {
+    return c.json({ error: "Too fast", retry_after_ms: rl.retryAfterMs }, 429);
   }
 
   // Verify participant
@@ -1203,6 +1241,20 @@ dms.put("/:id/messages/:messageId/reactions", async (c) => {
     .query("SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'")
     .get(channelId, user.id) as any;
   if (!participant) return c.json({ error: "Not found" }, 404);
+
+  // Block check (1:1 DMs)
+  const channel = db.query("SELECT is_group FROM dm_channels WHERE id = ?").get(channelId) as any;
+  if (!channel?.is_group) {
+    const otherParticipant = db.query(
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ?"
+    ).get(channelId, user.id) as any;
+    if (otherParticipant) {
+      const blocked = db.query(
+        "SELECT 1 FROM user_blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)"
+      ).get(user.id, otherParticipant.user_id, otherParticipant.user_id, user.id);
+      if (blocked) return c.json({ error: "Cannot react to this message" }, 403);
+    }
+  }
 
   // Verify message exists
   const msg = db

@@ -7,9 +7,10 @@ export const migration008 = {
       CREATE TABLE IF NOT EXISTS reports (
         id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(12)))),
         reporter_id TEXT NOT NULL REFERENCES users(id),
-        dm_channel_id TEXT NOT NULL REFERENCES dm_channels(id),
-        message_id TEXT NOT NULL,
-        type TEXT NOT NULL CHECK(type IN ('message', 'file')),
+        reported_user_id TEXT REFERENCES users(id),
+        dm_channel_id TEXT REFERENCES dm_channels(id),
+        message_id TEXT,
+        type TEXT NOT NULL CHECK(type IN ('message', 'file', 'user')),
         filename TEXT,
         reason TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'reviewed', 'dismissed')),
