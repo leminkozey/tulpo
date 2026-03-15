@@ -104,6 +104,7 @@
   let pendingFiles = $state<{ file: File; previewUrl: string; isImage: boolean }[]>([]);
   let uploading = $state(false);
   let dragOver = $state(false);
+  let uploadError = $state('');
   let fileInputEl: HTMLInputElement;
   let lightboxUrl = $state<string | null>(null);
 
@@ -509,16 +510,16 @@
 
     for (const file of fileList) {
       if (blocked.includes(file.type)) {
-        addError = `${file.name}: file type not allowed`;
-        setTimeout(() => addError = '', 3000);
+        uploadError = `${file.name}: File type not allowed`;
+        setTimeout(() => uploadError = '', 4000);
         continue;
       }
       const isImage = imageTypes.includes(file.type);
       const max = isImage ? maxImageSize : maxFileSize;
       if (file.size > max) {
         const maxMB = Math.round(max / 1024 / 1024);
-        addError = `${file.name}: too large (max ${maxMB} MB)`;
-        setTimeout(() => addError = '', 3000);
+        uploadError = `${file.name}: Too large (max ${maxMB} MB)`;
+        setTimeout(() => uploadError = '', 4000);
         continue;
       }
       const previewUrl = isImage ? URL.createObjectURL(file) : '';
@@ -1274,6 +1275,12 @@
         {/if}
         {#if isRateLimited}
           <div class="relative z-10 text-center text-xs text-warning/80 py-2 tracking-wide">Easy there, speedy! You can send again in {rateLimitRemaining}s</div>
+        {/if}
+        {#if uploadError}
+          <div class="relative z-10 flex items-center gap-2 px-3.5 py-2 text-xs text-danger">
+            <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            {uploadError}
+          </div>
         {/if}
         {#if replyingTo}
           <div class="relative z-10 flex items-center gap-2.5 bg-bg-tertiary border-l-[3px] border-l-accent border-t border-r border-t-border border-r-border rounded-t-lg px-3.5 py-2.5">
