@@ -1,10 +1,17 @@
 // ===== User =====
+export type AvatarType = "color" | "image" | "gif";
+
 export interface User {
   id: string;
   email: string;
   username: string;
   display_name: string | null;
   avatar_url: string | null;
+  avatar_type: AvatarType;
+  avatar_color: string | null;
+  bio: string;
+  pronouns: string;
+  banner_url: string | null;
   status: "online" | "offline" | "idle" | "dnd";
   created_at: string;
   updated_at: string;
@@ -12,8 +19,23 @@ export interface User {
 
 export type PublicUser = Pick<
   User,
-  "id" | "username" | "display_name" | "avatar_url" | "status"
+  "id" | "username" | "display_name" | "avatar_url" | "avatar_type" | "avatar_color" | "status"
 >;
+
+export interface UserLink {
+  id: string;
+  label: string;
+  url: string;
+  position: number;
+}
+
+export interface UserProfile extends PublicUser {
+  bio: string;
+  pronouns: string;
+  banner_url: string | null;
+  links: UserLink[];
+  created_at: string;
+}
 
 // ===== Auth =====
 export interface AuthResponse {

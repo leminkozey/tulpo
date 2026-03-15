@@ -10,13 +10,14 @@ import { migration008 } from "./migrations/008_reports";
 import { migration009 } from "./migrations/009_blocks_mutes";
 import { migration010 } from "./migrations/010_emoji_reactions";
 import { migration011 } from "./migrations/011_fix_reports";
+import { migration012 } from "./migrations/012_user_profiles";
 
 interface Migration {
   name: string;
   up: (db: ReturnType<typeof getDb>) => void;
 }
 
-const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011];
+const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010, migration011, migration012];
 
 export function runMigrations() {
   const db = getDb();

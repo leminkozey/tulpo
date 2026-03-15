@@ -32,7 +32,37 @@ export const updateUserSettingsSchema = z.object({
   allow_friend_request_notes: z.boolean().optional(),
 });
 
+export const updateProfileSchema = z.object({
+  display_name: z
+    .string()
+    .max(50, "Display name must be at most 50 characters")
+    .optional()
+    .nullable(),
+  bio: z
+    .string()
+    .max(300, "Bio must be at most 300 characters")
+    .optional(),
+  pronouns: z
+    .string()
+    .max(40, "Pronouns must be at most 40 characters")
+    .optional(),
+  avatar_color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Invalid color format")
+    .optional(),
+  links: z
+    .array(
+      z.object({
+        label: z.string().max(50, "Label must be at most 50 characters"),
+        url: z.string().url("Invalid URL").max(500, "URL must be at most 500 characters"),
+      })
+    )
+    .max(5, "Maximum 5 links allowed")
+    .optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SendFriendRequestInput = z.infer<typeof sendFriendRequestSchema>;
 export type UpdateUserSettingsInput = z.infer<typeof updateUserSettingsSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
