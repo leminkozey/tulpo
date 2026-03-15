@@ -259,180 +259,186 @@
     <!-- Content -->
     <div class="flex-1 overflow-y-auto">
       {#if activeTab === 'profile'}
-        <div class="max-w-[420px] mx-auto py-8 px-4">
+        <div class="max-w-[900px] mx-auto py-8 px-6">
           {#if profileLoading}
             <p class="text-sm text-text-muted text-center py-12">Loading...</p>
           {:else}
             <!-- Toast message -->
             {#if profileMessage}
-              <div class="mb-4 px-4 py-2.5 rounded-lg text-sm {profileMessage.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-danger/10 text-danger border border-danger/20'}">
+              <div class="mb-5 px-4 py-2.5 rounded-lg text-sm {profileMessage.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-danger/10 text-danger border border-danger/20'}">
                 {profileMessage.text}
               </div>
             {/if}
 
-            <!-- Profile Card -->
-            <div class="bg-bg-secondary rounded-2xl overflow-hidden border border-border shadow-lg">
-              <!-- Banner -->
-              <div class="h-[120px] relative group">
-                {#if bannerPreview}
-                  <img src={bannerPreview} alt="Banner" class="w-full h-full object-cover" />
-                {:else}
-                  <div class="w-full h-full bg-gradient-to-br from-bg-tertiary to-bg-hover"></div>
-                {/if}
-                <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center gap-2">
-                  <label class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer px-3 py-1.5 bg-bg-secondary/90 rounded-lg text-[12px] text-text-primary hover:bg-bg-hover border border-border">
-                    {bannerPreview ? 'Change' : 'Upload Banner'}
-                    <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadBanner} disabled={uploadingBanner} />
-                  </label>
-                  {#if bannerPreview}
-                    <button
-                      class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-3 py-1.5 bg-danger/90 rounded-lg text-[12px] text-white hover:bg-danger"
-                      onclick={removeBanner}
-                      disabled={uploadingBanner}
-                    >Remove</button>
-                  {/if}
-                </div>
-                {#if uploadingBanner}
-                  <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div class="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  </div>
-                {/if}
-              </div>
+            <div class="flex gap-8 items-start">
+              <!-- LEFT COLUMN: Edit Form -->
+              <div class="flex-1 min-w-0 space-y-6">
 
-              <!-- Avatar + Actions Row -->
-              <div class="relative px-4">
-                <!-- Avatar (overlapping banner) -->
-                <div class="absolute -top-10 group">
-                  <div class="relative">
-                    {#if profileData?.avatar_type !== 'color' && avatarPreview}
-                      <img src={avatarPreview} alt="Avatar" class="w-[80px] h-[80px] rounded-full object-cover border-[5px] border-bg-secondary" />
+                <!-- Section: Banner -->
+                <section>
+                  <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-3">Banner</h3>
+                  <div class="h-[120px] rounded-xl overflow-hidden relative group border border-border">
+                    {#if bannerPreview}
+                      <img src={bannerPreview} alt="Banner" class="w-full h-full object-cover" />
                     {:else}
-                      <div class="w-[80px] h-[80px] rounded-full flex items-center justify-center text-2xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {avatarColor}">
-                        {(displayName || auth.user?.username || '?').charAt(0).toUpperCase()}
-                      </div>
+                      <div class="w-full h-full bg-gradient-to-br from-bg-tertiary to-bg-hover"></div>
                     {/if}
-                    <!-- Status indicator -->
-                    <div class="absolute bottom-0.5 right-0.5 w-[18px] h-[18px] rounded-full border-[3px] border-bg-secondary {previewProfile.status === 'online' ? 'bg-success' : previewProfile.status === 'idle' ? 'bg-warning' : previewProfile.status === 'dnd' ? 'bg-danger' : 'bg-text-muted'}"></div>
-                    <!-- Avatar upload overlay -->
-                    <label class="absolute inset-[5px] rounded-full bg-black/0 group-hover:bg-black/50 transition-colors duration-200 flex items-center justify-center cursor-pointer">
-                      <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                      <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
-                    </label>
-                    {#if uploadingAvatar}
-                      <div class="absolute inset-[5px] rounded-full bg-black/50 flex items-center justify-center">
-                        <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center gap-2">
+                      <label class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer px-3 py-1.5 bg-bg-secondary/90 backdrop-blur-sm rounded-lg text-[12px] text-text-primary hover:bg-bg-hover border border-border">
+                        {bannerPreview ? 'Change' : 'Upload'}
+                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadBanner} disabled={uploadingBanner} />
+                      </label>
+                      {#if bannerPreview}
+                        <button
+                          class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-3 py-1.5 bg-danger/90 backdrop-blur-sm rounded-lg text-[12px] text-white hover:bg-danger"
+                          onclick={removeBanner}
+                          disabled={uploadingBanner}
+                        >Remove</button>
+                      {/if}
+                    </div>
+                    {#if uploadingBanner}
+                      <div class="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div class="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                       </div>
                     {/if}
                   </div>
-                </div>
-              </div>
+                </section>
 
-              <!-- Card Body -->
-              <div class="pt-12 px-4 pb-4">
-                <!-- Avatar options row -->
-                <div class="flex items-center gap-1.5 mb-3">
-                  <label class="cursor-pointer px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors">
-                    Upload Image
-                    <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
-                  </label>
-                  {#if profileData?.avatar_type !== 'color'}
-                    <button
-                      class="px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors cursor-pointer"
-                      onclick={removeAvatar}
-                      disabled={uploadingAvatar}
-                    >Use Color</button>
-                  {/if}
-                  <button
-                    class="px-2.5 py-1 text-[11px] transition-colors rounded-md border border-border cursor-pointer {showColorPicker ? 'text-accent bg-accent/10 border-accent/30' : 'text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover'}"
-                    onclick={() => showColorPicker = !showColorPicker}
-                  >
-                    <span class="inline-flex items-center gap-1.5">
-                      <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {avatarColor}"></span>
-                      Color
-                      <svg class="w-3 h-3 transition-transform duration-200 {showColorPicker ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                    </span>
-                  </button>
-                </div>
-
-                <!-- Collapsible color picker -->
-                {#if showColorPicker}
-                  <div class="mb-3 p-3 bg-bg-primary rounded-lg border border-border">
-                    <div class="flex flex-wrap gap-2 justify-center">
-                      {#each colorPresets as color}
-                        <button
-                          class="w-7 h-7 rounded-full border-2 transition-all duration-150 cursor-pointer {avatarColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-110'}"
-                          style="background-color: {color}"
-                          onclick={() => avatarColor = color}
-                        ></button>
-                      {/each}
+                <!-- Section: Avatar -->
+                <section>
+                  <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-3">Avatar</h3>
+                  <div class="flex items-center gap-4">
+                    <!-- Avatar preview -->
+                    <div class="relative group flex-shrink-0">
+                      {#if profileData?.avatar_type !== 'color' && avatarPreview}
+                        <img src={avatarPreview} alt="Avatar" class="w-[72px] h-[72px] rounded-full object-cover" />
+                      {:else}
+                        <div class="w-[72px] h-[72px] rounded-full flex items-center justify-center text-xl font-bold text-white" style="background-color: {avatarColor}">
+                          {(displayName || auth.user?.username || '?').charAt(0).toUpperCase()}
+                        </div>
+                      {/if}
+                      <label class="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/50 transition-colors duration-200 flex items-center justify-center cursor-pointer">
+                        <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
+                      </label>
+                      {#if uploadingAvatar}
+                        <div class="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                          <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        </div>
+                      {/if}
+                    </div>
+                    <!-- Avatar actions -->
+                    <div class="flex flex-col gap-2">
+                      <div class="flex items-center gap-1.5">
+                        <label class="cursor-pointer px-3 py-1.5 text-[12px] text-text-primary bg-accent hover:bg-accent-hover rounded-md transition-colors font-medium">
+                          Upload Image
+                          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
+                        </label>
+                        {#if profileData?.avatar_type !== 'color'}
+                          <button
+                            class="px-3 py-1.5 text-[12px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors cursor-pointer"
+                            onclick={removeAvatar}
+                            disabled={uploadingAvatar}
+                          >Remove</button>
+                        {/if}
+                      </div>
+                      <button
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-[12px] transition-colors rounded-md border cursor-pointer w-fit {showColorPicker ? 'text-accent bg-accent/10 border-accent/30' : 'text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover border-border'}"
+                        onclick={() => showColorPicker = !showColorPicker}
+                      >
+                        <span class="w-3 h-3 rounded-full inline-block" style="background-color: {avatarColor}"></span>
+                        Avatar Color
+                        <svg class="w-3 h-3 transition-transform duration-200 {showColorPicker ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
                     </div>
                   </div>
-                {/if}
-                <!-- Display Name -->
-                <input
-                  type="text"
-                  bind:value={displayName}
-                  placeholder={auth.user?.username || 'Display name'}
-                  maxlength={50}
-                  class="w-full bg-transparent text-lg font-bold text-text-primary placeholder:text-text-muted/40 focus:outline-none border-b border-transparent hover:border-border focus:border-accent/50 transition-colors pb-0.5"
-                />
-                <!-- Username + Pronouns row -->
-                <div class="flex items-center gap-1.5 mt-0.5">
-                  <span class="text-sm text-text-secondary">{auth.user?.username}</span>
-                  <span class="text-text-muted">&middot;</span>
+                  <!-- Collapsible color picker -->
+                  {#if showColorPicker}
+                    <div class="mt-3 p-3 bg-bg-secondary rounded-lg border border-border">
+                      <div class="flex flex-wrap gap-2">
+                        {#each colorPresets as color}
+                          <button
+                            class="w-7 h-7 rounded-full border-2 transition-all duration-150 cursor-pointer {avatarColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-110'}"
+                            style="background-color: {color}"
+                            onclick={() => avatarColor = color}
+                          ></button>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                </section>
+
+                <!-- Section: Display Name -->
+                <section>
+                  <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2">Display Name</h3>
+                  <input
+                    type="text"
+                    bind:value={displayName}
+                    placeholder={auth.user?.username || 'Display name'}
+                    maxlength={50}
+                    class="w-full bg-bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none transition-colors"
+                  />
+                </section>
+
+                <!-- Section: Pronouns -->
+                <section>
+                  <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2">Pronouns</h3>
                   <input
                     type="text"
                     bind:value={pronouns}
-                    placeholder="pronouns"
+                    placeholder="e.g. he/him, she/her, they/them"
                     maxlength={40}
-                    class="bg-transparent text-sm text-text-muted placeholder:text-text-muted/30 focus:outline-none focus:text-text-secondary border-b border-transparent hover:border-border focus:border-accent/50 transition-colors w-24"
+                    class="w-full bg-bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-text-secondary placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none transition-colors"
                   />
-                </div>
+                </section>
 
-                <!-- About Me -->
-                <div class="mt-4 pt-3 border-t border-border">
-                  <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide mb-1.5">About Me</p>
+                <!-- Section: About Me -->
+                <section>
+                  <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest">About Me</h3>
+                    <span class="text-[11px] text-text-muted">{bio.length}/300</span>
+                  </div>
                   <textarea
                     bind:value={bio}
                     placeholder="Tell others about yourself..."
                     maxlength={300}
-                    rows={3}
-                    class="w-full bg-bg-primary border border-border rounded-lg px-3 py-2 text-[13px] text-text-secondary leading-relaxed placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none transition-colors resize-none"
+                    rows={4}
+                    class="w-full bg-bg-secondary border border-border rounded-lg px-3 py-2 text-[13px] text-text-secondary leading-relaxed placeholder:text-text-muted/40 focus:border-accent/50 focus:outline-none transition-colors resize-none"
                   ></textarea>
-                  <p class="text-[11px] text-text-muted text-right -mt-0.5">{bio.length}/300</p>
-                </div>
+                </section>
 
-                <!-- Links -->
-                <div class="mt-2 pt-3 border-t border-border">
+                <!-- Section: Links -->
+                <section>
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide">Links</p>
+                    <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest">Links</h3>
                     {#if links.length < 5}
                       <button
-                        class="text-[11px] text-accent hover:text-accent-hover transition-colors cursor-pointer"
+                        class="text-[12px] text-accent hover:text-accent-hover transition-colors cursor-pointer"
                         onclick={addLink}
-                      >+ Add</button>
+                      >+ Add Link</button>
                     {/if}
                   </div>
                   {#if links.length === 0}
-                    <p class="text-[12px] text-text-muted">No links yet.</p>
+                    <p class="text-[13px] text-text-muted/60">No links added yet.</p>
                   {:else}
-                    <div class="space-y-1.5">
+                    <div class="space-y-2">
                       {#each links as link, i}
-                        <div class="flex gap-1.5 items-center">
+                        <div class="flex gap-2 items-center bg-bg-secondary border border-border rounded-lg px-3 py-2">
                           <svg class="w-3.5 h-3.5 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                           <input
                             type="text"
                             bind:value={link.label}
                             placeholder="Label"
                             maxlength={50}
-                            class="w-20 flex-shrink-0 bg-transparent text-[13px] text-accent placeholder:text-text-muted/30 focus:outline-none border-b border-transparent hover:border-border focus:border-accent/50 transition-colors"
+                            class="w-24 flex-shrink-0 bg-transparent text-[13px] text-text-primary placeholder:text-text-muted/30 focus:outline-none"
                           />
+                          <div class="w-px h-4 bg-border flex-shrink-0"></div>
                           <input
                             type="url"
                             bind:value={link.url}
                             placeholder="https://..."
                             maxlength={500}
-                            class="flex-1 min-w-0 bg-transparent text-[13px] text-text-muted placeholder:text-text-muted/20 focus:outline-none border-b border-transparent hover:border-border focus:border-accent/50 transition-colors"
+                            class="flex-1 min-w-0 bg-transparent text-[13px] text-text-muted placeholder:text-text-muted/20 focus:outline-none"
                           />
                           <button
                             class="w-6 h-6 flex-shrink-0 flex items-center justify-center text-text-muted/40 hover:text-danger transition-colors cursor-pointer"
@@ -445,33 +451,89 @@
                       {/each}
                     </div>
                   {/if}
-                </div>
+                </section>
 
-                <!-- Member Since -->
-                <div class="mt-3 pt-3 border-t border-border">
-                  <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide mb-1">Member Since</p>
-                  <p class="text-[13px] text-text-secondary">{new Date(previewProfile.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                <!-- Save bar -->
+                <div class="flex items-center justify-between pt-2">
+                  <p class="text-[11px] text-text-muted">Changes are not saved until you click Save.</p>
+                  <div class="flex items-center gap-2">
+                    <button
+                      class="px-4 py-2 bg-bg-secondary hover:bg-bg-hover text-text-primary rounded-lg text-sm border border-border transition-colors cursor-pointer"
+                      onclick={() => showPreview = true}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      class="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
+                      onclick={saveProfile}
+                      disabled={profileSaving}
+                    >
+                      {profileSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Action buttons below card -->
-            <div class="flex items-center justify-between mt-4">
-              <p class="text-[11px] text-text-muted">Changes are not saved until you click Save.</p>
-              <div class="flex items-center gap-2">
-                <button
-                  class="px-4 py-2 bg-bg-secondary hover:bg-bg-hover text-text-primary rounded-lg text-sm border border-border transition-colors cursor-pointer"
-                  onclick={() => showPreview = true}
-                >
-                  Preview
-                </button>
-                <button
-                  class="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
-                  onclick={saveProfile}
-                  disabled={profileSaving}
-                >
-                  {profileSaving ? 'Saving...' : 'Save'}
-                </button>
+              <!-- RIGHT COLUMN: Live Preview Card -->
+              <div class="w-[300px] flex-shrink-0 sticky top-8">
+                <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-3">Preview</h3>
+                <div class="bg-bg-secondary rounded-xl overflow-hidden border border-border">
+                  <!-- Preview Banner -->
+                  <div class="h-[90px] relative">
+                    {#if previewProfile.banner_url}
+                      <img src={previewProfile.banner_url} alt="Banner" class="w-full h-full object-cover" />
+                    {:else}
+                      <div class="w-full h-full bg-gradient-to-br from-bg-tertiary to-bg-hover"></div>
+                    {/if}
+                  </div>
+                  <!-- Preview Avatar -->
+                  <div class="relative px-4">
+                    <div class="absolute -top-8">
+                      {#if previewProfile.avatar_type !== 'color' && previewProfile.avatar_url}
+                        <img src={previewProfile.avatar_url} alt="Avatar" class="w-[64px] h-[64px] rounded-full object-cover border-4 border-bg-secondary" />
+                      {:else}
+                        <div class="w-[64px] h-[64px] rounded-full flex items-center justify-center text-xl font-bold text-white border-4 border-bg-secondary" style="background-color: {previewProfile.avatar_color || '#14b8a6'}">
+                          {(previewProfile.display_name || previewProfile.username).charAt(0).toUpperCase()}
+                        </div>
+                      {/if}
+                      <div class="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full border-[3px] border-bg-secondary {previewProfile.status === 'online' ? 'bg-success' : previewProfile.status === 'idle' ? 'bg-warning' : previewProfile.status === 'dnd' ? 'bg-danger' : 'bg-text-muted'}"></div>
+                    </div>
+                  </div>
+                  <!-- Preview Info -->
+                  <div class="pt-10 px-4 pb-4">
+                    <h4 class="text-[15px] font-bold text-text-primary leading-tight">{previewProfile.display_name || previewProfile.username}</h4>
+                    <p class="text-[13px] text-text-secondary">{previewProfile.username}{#if previewProfile.pronouns}<span class="text-text-muted"> &middot; {previewProfile.pronouns}</span>{/if}</p>
+
+                    {#if previewProfile.bio}
+                      <div class="mt-3 pt-3 border-t border-border">
+                        <p class="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">About Me</p>
+                        <p class="text-[12px] text-text-secondary leading-relaxed whitespace-pre-wrap break-words">{previewProfile.bio}</p>
+                      </div>
+                    {/if}
+
+                    {#if previewProfile.links.length > 0}
+                      <div class="mt-3 pt-3 border-t border-border">
+                        <p class="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1.5">Links</p>
+                        <div class="space-y-1">
+                          {#each previewProfile.links as link}
+                            <button
+                              class="flex items-center gap-1.5 text-[12px] text-accent hover:text-accent-hover transition-colors group w-full text-left"
+                              onclick={() => openExternalLink(link.url, link.label)}
+                            >
+                              <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                              <span class="truncate group-hover:underline">{link.label || link.url}</span>
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+
+                    <div class="mt-3 pt-3 border-t border-border">
+                      <p class="text-[11px] font-semibold text-text-muted uppercase tracking-wide mb-1">Member Since</p>
+                      <p class="text-[12px] text-text-secondary">{new Date(previewProfile.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           {/if}
