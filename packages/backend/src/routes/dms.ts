@@ -325,10 +325,11 @@ dms.post("/:id/messages", async (c) => {
       return c.json({ error: `Upload limit reached, try again in ${retryMin} min` }, 429);
     }
 
-    if ((BLOCKED_MIME_TYPES as readonly string[]).includes(file.type)) {
+    const baseType = file.type.split(";")[0].trim();
+    if ((BLOCKED_MIME_TYPES as readonly string[]).includes(baseType)) {
       return c.json({ error: "File type not allowed" }, 400);
     }
-    const isImage = (IMAGE_MIME_TYPES as readonly string[]).includes(file.type);
+    const isImage = (IMAGE_MIME_TYPES as readonly string[]).includes(baseType);
     const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     if (file.size > maxSize) {
       const maxMB = Math.round(maxSize / 1024 / 1024);

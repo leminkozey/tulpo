@@ -73,7 +73,8 @@ export function checkFileSafety(
   mimeType: string
 ): { safe: boolean; reason?: string } {
   // Check for HTML/script content in non-text/non-html files (polyglot detection)
-  if (mimeType !== "text/plain" && mimeType !== "text/html" && mimeType !== "application/xhtml+xml" && mimeType !== "image/svg+xml") {
+  const baseType = mimeType.split(";")[0].trim();
+  if (baseType !== "text/plain" && baseType !== "text/html" && baseType !== "application/xhtml+xml" && baseType !== "image/svg+xml") {
     // Check both head and tail of the file for embedded scripts
     const headSample = new TextDecoder("utf-8", { fatal: false }).decode(
       buffer.slice(0, 8192)
