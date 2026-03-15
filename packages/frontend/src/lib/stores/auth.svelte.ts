@@ -22,22 +22,40 @@ function createAuthStore() {
     api.setToken(null);
   }
 
-  async function init() {
-    const savedToken = localStorage.getItem(TOKEN_KEY);
-    if (!savedToken) {
-      loading = false;
-      return;
-    }
+  let initPromise: Promise<void> | null = null;
 
-    api.setToken(savedToken);
-    try {
-      const data = await api.get<{ user: PublicUser }>("/auth/me");
-      user = data.user;
-      token = savedToken;
-    } catch {
-      clearSession();
-    }
-    loading = false;
+  async function init() {
+    // Deduplicate: if init is already running, return the same promise
+    if (initPromise) return initPromise;
+    // If already initialized (user loaded), skip
+    if (user) { loading = false; return; }
+
+    initPromise = (async () => {
+      const savedToken = localStorage.getItem(TOKEN_KEY);
+      if (!savedToken) {
+        loading = false;
+        return;
+      }
+
+      api.setToken(savedToken);
+      try {
+        const data = await api.get<{ user: PublicUser }>("/auth/me");
+        user = data.user;
+        token = savedToken;
+      } catch (err) {
+        // Only clear session on auth errors (401/403), not network/server errors
+        if (err && typeof err === 'object' && 'status' in err && ((err as any).status === 401 || (err as any).status === 403)) {
+          clearSession();
+        } else {
+          // Network error or server issue — keep token, assume still valid
+          token = savedToken;
+          console.warn('[auth] init failed, keeping session:', err);
+        }
+      }
+      loading = false;
+    })();
+
+    return initPromise;
   }
 
   async function register(email: string, username: string, password: string) {

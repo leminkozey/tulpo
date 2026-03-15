@@ -5,6 +5,7 @@
   import { friendsStore } from '$lib/stores/friends.svelte';
   import { wsClient } from '$lib/ws.svelte';
   import { api } from '$lib/api';
+  import { emojiCategories } from '$lib/emoji-data';
 
   let unsubs: (() => void)[] = [];
   let showUserMenu = $state(false);
@@ -37,6 +38,7 @@
   let activeDmChannelId = $state<string | null>(null);
   let activeDmUser = $state<any>(null);
   let messages = $state<any[]>([]);
+  let filteredMessages = $derived(messages.filter(m => !friendsStore.isBlocked(m.author_id)));
   let messageInput = $state('');
   let drafts = $state<Record<string, string>>({});
   let messagesLoading = $state(false);
@@ -77,7 +79,115 @@
   // Delete group dialog
   let deleteGroupDialog = $state<{ channelId: string; channelName: string; myStatus: string; alsoLeave: boolean } | null>(null);
 
+  // File attachment context menu
+  let fileContextMenu = $state<{ x: number; y: number; url: string; filename: string; messageId: string } | null>(null);
+  let fileContextMenuRef: HTMLDivElement | undefined = $state();
+
+  // Message context menu (right-click)
+  let msgContextMenu = $state<{ x: number; y: number; msg: any } | null>(null);
+  let msgContextMenuRef: HTMLDivElement | undefined = $state();
+
+  // Report dialog
+  let reportDialog = $state<{ type: 'message' | 'file' | 'user'; messageId: string; targetUserId?: string; targetUsername?: string; filename?: string; reason: string; alsoBlock: boolean; submitting: boolean; success: boolean } | null>(null);
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
+
+  // Emoji/GIF/Sticker picker
+  type PickerTab = 'emoji' | 'gif' | 'sticker';
+  let showPicker = $state(false);
+  let pickerTab = $state<PickerTab>('emoji');
+  let pickerSearch = $state('');
+  let pickerSearchEl: HTMLInputElement | undefined = $state();
+  let gifResults = $state<any[]>([]);
+  let stickerResults = $state<any[]>([]);
+  let gifLoading = $state(false);
+  let stickerLoading = $state(false);
+  let gifSearchDebounce: ReturnType<typeof setTimeout> | null = null;
+  let pickerRef: HTMLDivElement | undefined = $state();
+  let pendingGifs = $state<{ url: string; preview: string; title: string }[]>([]);
+
+  function togglePicker(tab?: PickerTab) {
+    if (showPicker && (!tab || tab === pickerTab)) {
+      showPicker = false;
+    } else {
+      showPicker = true;
+      if (tab) pickerTab = tab;
+      pickerSearch = '';
+      if (pickerTab === 'gif') loadGifTrending();
+      if (pickerTab === 'sticker') loadStickerTrending();
+      tick().then(() => pickerSearchEl?.focus());
+    }
+  }
+
+  function onPickerTabChange(tab: PickerTab) {
+    pickerTab = tab;
+    pickerSearch = '';
+    gifResults = [];
+    stickerResults = [];
+    if (tab === 'gif') loadGifTrending();
+    if (tab === 'sticker') loadStickerTrending();
+    tick().then(() => pickerSearchEl?.focus());
+  }
+
+  async function loadGifTrending() {
+    gifLoading = true;
+    try {
+      const res = await api.get<{ data: any[] }>('/media/gifs/trending?limit=30');
+      gifResults = res.data;
+    } catch { gifResults = []; }
+    gifLoading = false;
+  }
+
+  async function searchGifs(q: string) {
+    if (!q.trim()) { loadGifTrending(); return; }
+    gifLoading = true;
+    try {
+      const res = await api.get<{ data: any[] }>(`/media/gifs/search?q=${encodeURIComponent(q)}&limit=30`);
+      gifResults = res.data;
+    } catch { gifResults = []; }
+    gifLoading = false;
+  }
+
+  async function loadStickerTrending() {
+    stickerLoading = true;
+    try {
+      const res = await api.get<{ data: any[] }>('/media/stickers/trending?limit=30');
+      stickerResults = res.data;
+    } catch { stickerResults = []; }
+    stickerLoading = false;
+  }
+
+  async function searchStickers(q: string) {
+    if (!q.trim()) { loadStickerTrending(); return; }
+    stickerLoading = true;
+    try {
+      const res = await api.get<{ data: any[] }>(`/media/stickers/search?q=${encodeURIComponent(q)}&limit=30`);
+      stickerResults = res.data;
+    } catch { stickerResults = []; }
+    stickerLoading = false;
+  }
+
+  function onPickerSearch() {
+    if (gifSearchDebounce) clearTimeout(gifSearchDebounce);
+    gifSearchDebounce = setTimeout(() => {
+      if (pickerTab === 'gif') searchGifs(pickerSearch);
+      if (pickerTab === 'sticker') searchStickers(pickerSearch);
+    }, 300);
+  }
+
+  function insertEmoji(emoji: string) {
+    messageInput += emoji;
+    tick().then(() => messageInputEl?.focus());
+  }
+
+  function selectGifOrSticker(item: any) {
+    pendingGifs = [...pendingGifs, { url: item.url, preview: item.preview || item.url, title: item.title || 'GIF' }];
+    // Don't close picker — let user select multiple
+  }
+
+  function removePendingGif(index: number) {
+    pendingGifs = pendingGifs.filter((_, i) => i !== index);
+  }
 
   // Mention autocomplete
   let mentionActive = $state(false);
@@ -109,6 +219,62 @@
   let fileInputEl: HTMLInputElement;
   let lightboxUrl = $state<string | null>(null);
 
+  function openFileContextMenu(e: MouseEvent, att: any, messageId: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    msgContextMenu = null;
+    fileContextMenu = { x: e.clientX, y: e.clientY, url: att.url, filename: att.filename, messageId };
+  }
+
+  function closeFileContextMenu() {
+    fileContextMenu = null;
+  }
+
+  function openMsgContextMenu(e: MouseEvent, msg: any) {
+    if (msg.content?.startsWith('[system]') || msg.is_system) return;
+    e.preventDefault();
+    e.stopPropagation();
+    fileContextMenu = null;
+    msgContextMenu = { x: e.clientX, y: e.clientY, msg };
+  }
+
+  function closeMsgContextMenu() {
+    msgContextMenu = null;
+  }
+
+  function openReportDialog(type: 'message' | 'file' | 'user', messageId: string, opts?: { filename?: string; targetUserId?: string; targetUsername?: string }) {
+    reportDialog = { type, messageId, filename: opts?.filename, targetUserId: opts?.targetUserId, targetUsername: opts?.targetUsername, reason: '', alsoBlock: false, submitting: false, success: false };
+  }
+
+  async function submitReport() {
+    if (!reportDialog) return;
+    reportDialog.submitting = true;
+    try {
+      if (reportDialog.type === 'user' && reportDialog.targetUserId) {
+        // User report — use /friends/report endpoint
+        await api.post(`/friends/report/${reportDialog.targetUserId}`, {
+          reason: reportDialog.reason,
+        });
+      } else if (activeDmChannelId) {
+        // Message/file report
+        await api.post(`/dms/${activeDmChannelId}/messages/${reportDialog.messageId}/report`, {
+          type: reportDialog.type,
+          reason: reportDialog.reason,
+          filename: reportDialog.filename,
+          target_user_id: reportDialog.targetUserId,
+        });
+      }
+      if (reportDialog.alsoBlock && reportDialog.targetUserId) {
+        await friendsStore.blockUser(reportDialog.targetUserId);
+        if (activeDmUser?.id === reportDialog.targetUserId) goToFriends();
+      }
+      reportDialog.success = true;
+      setTimeout(() => { reportDialog = null; }, 1500);
+    } catch {
+      reportDialog.submitting = false;
+    }
+  }
+
   function handleContextMenu(e: MouseEvent, type: 'friend' | 'group', data: any) {
     e.preventDefault();
     e.stopPropagation();
@@ -122,6 +288,19 @@
   function handleWindowClick(e: MouseEvent) {
     if (contextMenu && contextMenuRef && !contextMenuRef.contains(e.target as Node)) {
       closeContextMenu();
+    }
+    if (fileContextMenu && fileContextMenuRef && !fileContextMenuRef.contains(e.target as Node)) {
+      closeFileContextMenu();
+    }
+    if (msgContextMenu && msgContextMenuRef && !msgContextMenuRef.contains(e.target as Node)) {
+      closeMsgContextMenu();
+    }
+    if (showPicker && pickerRef && !pickerRef.contains(e.target as Node)) {
+      // Check if click was on picker toggle buttons
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-picker-btn]')) {
+        showPicker = false;
+      }
     }
   }
 
@@ -571,12 +750,19 @@
   async function sendMessage() {
     const hasContent = messageInput.trim().length > 0;
     const hasFiles = pendingFiles.length > 0;
-    if ((!hasContent && !hasFiles) || !activeDmChannelId || sendingMessage || isRateLimited) return;
+    const hasGifs = pendingGifs.length > 0;
+    if ((!hasContent && !hasFiles && !hasGifs) || !activeDmChannelId || sendingMessage || isRateLimited) return;
 
-    const content = messageInput.trim();
+    const textContent = messageInput.trim();
+    // Combine text with GIF URLs: all GIF URLs go after text, separated by newlines
+    const gifUrls = pendingGifs.map(g => g.url).join('\n');
+    const content = hasGifs
+      ? (textContent ? textContent + '\n' + gifUrls : gifUrls)
+      : textContent;
     const replyId = replyingTo?.id || null;
     const filesToSend = [...pendingFiles];
     messageInput = '';
+    pendingGifs = [];
     if (activeDmChannelId) {
       const { [activeDmChannelId]: _, ...rest } = drafts;
       drafts = rest;
@@ -734,15 +920,72 @@
     return mentionColors[Math.abs(hash) % mentionColors.length];
   }
 
+  const GIPHY_URL_RE = /https:\/\/media\d*\.giphy\.com\/media\/[^\s]+\.gif(?:\?[^\s]*)?/g;
+
+  function isGifOnly(content: string): boolean {
+    if (!content) return false;
+    const withoutGifs = content.replace(GIPHY_URL_RE, '').replace(/\s+/g, '').trim();
+    return withoutGifs.length === 0 && content.includes('media') && content.includes('giphy.com');
+  }
+
+  // Collect GIF URLs from consecutive gif-only messages following startIdx (same author, within 20s)
+  function getGifChainUrls(msgs: typeof filteredMessages, startIdx: number): string[] {
+    const urls: string[] = [];
+    const startMsg = msgs[startIdx];
+    for (let j = startIdx + 1; j < msgs.length; j++) {
+      const m = msgs[j];
+      if (m.author_id !== startMsg.author_id) break;
+      if (!isGifOnly(m.content)) break;
+      const td = new Date(m.created_at).getTime() - new Date(msgs[j - 1].created_at).getTime();
+      if (td >= 20000) break;
+      const matched = m.content.match(GIPHY_URL_RE);
+      if (matched) urls.push(...matched);
+    }
+    return urls;
+  }
+
   function renderContent(content: string): string {
     const escaped = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return escaped.replace(/@(\w+)/g, (_, name) => {
-      if (name === 'everyone') {
-        return `<span style="color:#fbbf24;background:rgba(251,191,36,0.12)" class="rounded px-1">@everyone</span>`;
-      }
-      const c = getMentionColor(name);
-      return `<span style="color:${c.text};background:${c.bg}" class="rounded px-1">@${name}</span>`;
-    });
+
+    // Extract GIPHY URLs
+    const gifUrls = content.match(GIPHY_URL_RE) || [];
+    // Text without GIF URLs
+    const textOnly = content.replace(GIPHY_URL_RE, '').replace(/\n+/g, '\n').trim();
+
+    let html = '';
+
+    // Render text part with mentions
+    if (textOnly) {
+      const escapedText = textOnly.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      html += escapedText.replace(/@(\w+)/g, (_, name) => {
+        if (name === 'everyone') {
+          return `<span style="color:#fbbf24;background:rgba(251,191,36,0.12)" class="rounded px-1">@everyone</span>`;
+        }
+        const c = getMentionColor(name);
+        return `<span style="color:${c.text};background:${c.bg}" class="rounded px-1">@${name}</span>`;
+      });
+    }
+
+    // Render GIFs as a flex row
+    if (gifUrls.length > 0) {
+      const imgs = gifUrls.map(url =>
+        `<img src="${url}" alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />`
+      ).join('');
+      html += `${textOnly ? '<br/>' : ''}<div class="flex flex-wrap gap-1.5 mt-1">${imgs}</div>`;
+    }
+
+    // If no GIFs, apply normal mention rendering
+    if (gifUrls.length === 0) {
+      return escaped.replace(/@(\w+)/g, (_, name) => {
+        if (name === 'everyone') {
+          return `<span style="color:#fbbf24;background:rgba(251,191,36,0.12)" class="rounded px-1">@everyone</span>`;
+        }
+        const c = getMentionColor(name);
+        return `<span style="color:${c.text};background:${c.bg}" class="rounded px-1">@${name}</span>`;
+      });
+    }
+
+    return html;
   }
 
   function handleMentionInput() {
@@ -1109,14 +1352,27 @@
           </div>
         {:else}
           <div>
-            {#each messages as msg, i (msg.id)}
-              {@const prevMsg = i > 0 ? messages[i - 1] : null}
+            {#each filteredMessages as msg, i (msg.id)}
+              {@const prevMsg = i > 0 ? filteredMessages[i - 1] : null}
+              {@const isMuted = friendsStore.isMuted(msg.author_id)}
               {@const isSystem = msg.content?.startsWith('[system]') || msg.is_system}
               {@const sameAuthor = !isSystem && prevMsg?.author_id === msg.author_id && !prevMsg?.content?.startsWith('[system]')}
               {@const timeDiff = prevMsg ? new Date(msg.created_at).getTime() - new Date(prevMsg.created_at).getTime() : Infinity}
               {@const grouped = sameAuthor && timeDiff < 300000}
-
-              {#if isSystem}
+              {@const gifOnly = isGifOnly(msg.content)}
+              {@const prevGifOnly = prevMsg && isGifOnly(prevMsg.content)}
+              {@const gifChain = gifOnly && prevGifOnly && sameAuthor && timeDiff < 20000}
+              {#if isMuted}
+                <!-- Muted user message -->
+                {#if !sameAuthor || timeDiff >= 300000}
+                  <div class="px-4 py-1 {i > 0 ? 'mt-2' : ''}">
+                    <p class="text-[12px] text-text-muted/40 italic">Message from muted user</p>
+                  </div>
+                {/if}
+              {:else if gifChain}
+                <!-- GIF chain: merged into previous message's flex container, keep anchor for scrollToMessage -->
+                <div data-msg-id={msg.id} class="hidden"></div>
+              {:else if isSystem}
                 <!-- System message divider -->
                 <div class="flex items-center gap-3 px-4 py-2 {i > 0 ? 'mt-3' : ''} select-none">
                   <div class="flex-1 h-px bg-border/60"></div>
@@ -1125,7 +1381,7 @@
                 </div>
               {:else if !grouped}
                 <!-- First message in group (with avatar) -->
-                <div class="relative px-4 py-1 hover:bg-bg-message-hover transition-colors duration-75 group {i > 0 ? 'mt-3' : ''}" data-msg-id={msg.id}>
+                <div class="relative px-4 py-1 hover:bg-bg-message-hover transition-colors duration-75 group {i > 0 ? 'mt-3' : ''}" data-msg-id={msg.id} oncontextmenu={(e) => openMsgContextMenu(e, msg)}>
                   {#if msg.reply_to_id}
                     <button class="flex items-center gap-1.5 ml-[3.25rem] mb-1 text-[12px] text-text-muted hover:text-text-secondary transition-colors group/reply" onclick={() => scrollToMessage(msg.reply_to_id)}>
                       <svg class="w-[14px] h-[14px] flex-shrink-0 text-text-muted/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
@@ -1154,17 +1410,30 @@
                           <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
                         </div>
                       {:else}
-                        {#if msg.content}<p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>{/if}
+                        {#if msg.content}
+                          {#if gifOnly}
+                            <div class="flex flex-wrap gap-1.5 mt-1">
+                              {#each (msg.content.match(GIPHY_URL_RE) || []) as gifUrl}
+                                <img src={gifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
+                              {/each}
+                              {#each getGifChainUrls(filteredMessages, i) as chainGifUrl}
+                                <img src={chainGifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
+                              {/each}
+                            </div>
+                          {:else}
+                            <p class="text-[15px] text-text-secondary leading-[1.4] break-words mt-1">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                          {/if}
+                        {/if}
                       {/if}
                       {#if msg.attachments?.length > 0}
                         <div class="flex flex-wrap gap-2 mt-1.5">
                           {#each msg.attachments as att (att.id)}
                             {#if att.mime_type.startsWith('image/')}
-                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url} oncontextmenu={(e) => openFileContextMenu(e, att, msg.id)}>
                                 <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
                               </button>
                             {:else}
-                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]" oncontextmenu={(e) => openFileContextMenu(e, att, msg.id)}>
                                 <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
                                   <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                                 </div>
@@ -1180,7 +1449,7 @@
                     </div>
                   </div>
                   <!-- Action toolbar -->
-                  <div class="absolute right-4 top-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
+                  <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
                     <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
@@ -1198,7 +1467,7 @@
                 </div>
               {:else}
                 <!-- Grouped message (no avatar) -->
-                <div class="relative px-4 py-[2px] hover:bg-bg-message-hover transition-colors duration-75 group" data-msg-id={msg.id}>
+                <div class="relative px-4 py-[2px] hover:bg-bg-message-hover transition-colors duration-75 group" data-msg-id={msg.id} oncontextmenu={(e) => openMsgContextMenu(e, msg)}>
                   {#if msg.reply_to_id}
                     <button class="flex items-center gap-1.5 ml-[3.25rem] mb-1 text-[12px] text-text-muted hover:text-text-secondary transition-colors group/reply" onclick={() => scrollToMessage(msg.reply_to_id)}>
                       <svg class="w-[14px] h-[14px] flex-shrink-0 text-text-muted/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
@@ -1223,17 +1492,30 @@
                           <p class="text-[11px] text-text-muted mt-1">Escape to cancel · Enter to save</p>
                         </div>
                       {:else}
-                        {#if msg.content}<p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>{/if}
+                        {#if msg.content}
+                          {#if gifOnly}
+                            <div class="flex flex-wrap gap-1.5 mt-1">
+                              {#each (msg.content.match(GIPHY_URL_RE) || []) as gifUrl}
+                                <img src={gifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
+                              {/each}
+                              {#each getGifChainUrls(filteredMessages, i) as chainGifUrl}
+                                <img src={chainGifUrl} alt="GIF" loading="lazy" class="max-h-[200px] max-w-[250px] rounded-lg object-contain" />
+                              {/each}
+                            </div>
+                          {:else}
+                            <p class="text-[15px] text-text-secondary leading-[1.4] break-words">{@html renderContent(msg.content)}{#if msg.edited_at}<span class="text-[11px] text-text-muted/40 ml-1.5">(edited)</span>{/if}</p>
+                          {/if}
+                        {/if}
                       {/if}
                       {#if msg.attachments?.length > 0}
                         <div class="flex flex-wrap gap-2 mt-1.5">
                           {#each msg.attachments as att (att.id)}
                             {#if att.mime_type.startsWith('image/')}
-                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url}>
+                              <button type="button" class="block rounded-lg overflow-hidden border border-border/50 hover:border-accent/40 transition-colors" onclick={() => lightboxUrl = att.url} oncontextmenu={(e) => openFileContextMenu(e, att, msg.id)}>
                                 <img src={att.url} alt={att.filename} loading="lazy" class="max-w-[400px] max-h-[300px] object-contain bg-bg-primary" />
                               </button>
                             {:else}
-                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]">
+                              <a href={att.url} download={att.filename} class="flex items-center gap-3 bg-bg-primary/50 border border-border rounded-lg px-3 py-2.5 hover:bg-bg-hover/50 transition-colors group/file max-w-[300px]" oncontextmenu={(e) => openFileContextMenu(e, att, msg.id)}>
                                 <div class="w-8 h-8 rounded-md bg-accent/10 flex items-center justify-center flex-shrink-0">
                                   <svg class="w-4 h-4 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
                                 </div>
@@ -1249,7 +1531,7 @@
                     </div>
                   </div>
                   <!-- Action toolbar -->
-                  <div class="absolute right-4 top-0 -translate-y-1/2 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
+                  <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
                     <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
@@ -1272,6 +1554,13 @@
       </div>
 
       <!-- Message input -->
+      {#if activeDmUser && friendsStore.isBlocked(activeDmUser.id)}
+        <div class="px-4 pb-4">
+          <div class="rounded-xl bg-bg-tertiary border border-border px-4 py-3 text-center">
+            <p class="text-sm text-text-muted">You've blocked this user. Unblock them to send messages.</p>
+          </div>
+        </div>
+      {:else}
       <div class="px-4 pb-4 relative">
         <!-- Typing indicator — avatars peeking above input, bottom 40% hidden behind it -->
         {#if typingUsersList.length > 0}
@@ -1307,6 +1596,106 @@
             {uploadError}
           </div>
         {/if}
+        <!-- Emoji/GIF/Sticker Picker -->
+        {#if showPicker}
+          <div bind:this={pickerRef} class="absolute bottom-full right-0 mb-2 w-[420px] h-[400px] bg-bg-secondary border border-border rounded-xl shadow-xl z-20 flex flex-col overflow-hidden">
+            <!-- Picker tabs -->
+            <div class="flex border-b border-border flex-shrink-0">
+              <button class="flex-1 py-2.5 text-sm font-medium transition-colors {pickerTab === 'emoji' ? 'text-accent border-b-2 border-accent' : 'text-text-muted hover:text-text-primary'}" onclick={() => onPickerTabChange('emoji')}>Emoji</button>
+              <button class="flex-1 py-2.5 text-sm font-medium transition-colors {pickerTab === 'gif' ? 'text-accent border-b-2 border-accent' : 'text-text-muted hover:text-text-primary'}" onclick={() => onPickerTabChange('gif')}>GIF</button>
+              <button class="flex-1 py-2.5 text-sm font-medium transition-colors {pickerTab === 'sticker' ? 'text-accent border-b-2 border-accent' : 'text-text-muted hover:text-text-primary'}" onclick={() => onPickerTabChange('sticker')}>Sticker</button>
+            </div>
+
+            <!-- Search -->
+            {#if pickerTab !== 'emoji'}
+              <div class="px-3 py-2 flex-shrink-0">
+                <input
+                  type="text"
+                  bind:this={pickerSearchEl}
+                  bind:value={pickerSearch}
+                  oninput={onPickerSearch}
+                  placeholder={pickerTab === 'emoji' ? 'Search emoji...' : pickerTab === 'gif' ? 'Search GIFs...' : 'Search stickers...'}
+                  class="w-full bg-bg-tertiary border border-border rounded-lg px-3 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent/50 focus:outline-none"
+                />
+              </div>
+            {/if}
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto overflow-x-hidden p-2">
+              {#if pickerTab === 'emoji'}
+                <!-- Emoji grid -->
+                {#each emojiCategories as category, ci}
+                  {@const filteredEmojis = pickerSearch ? category.emojis.filter(() => true) : category.emojis}
+                  {#if !pickerSearch || ci > 0}
+                    <div class="mb-2">
+                      <p class="text-[11px] font-semibold text-text-muted uppercase tracking-wide px-1 py-1">{category.name}</p>
+                      <div class="grid grid-cols-9 gap-0">
+                        {#each (pickerSearch ? category.emojis : category.emojis) as emoji}
+                          <button
+                            type="button"
+                            class="w-10 h-10 flex items-center justify-center text-[22px] rounded-md hover:bg-bg-hover transition-colors cursor-pointer"
+                            onclick={() => insertEmoji(emoji)}
+                          >{emoji}</button>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                {/each}
+
+              {:else if pickerTab === 'gif'}
+                <!-- GIF grid -->
+                {#if gifLoading}
+                  <div class="flex items-center justify-center h-full">
+                    <p class="text-sm text-text-muted">Loading GIFs...</p>
+                  </div>
+                {:else if gifResults.length === 0}
+                  <div class="flex flex-col items-center justify-center h-full text-center">
+                    <p class="text-sm text-text-muted">{pickerSearch ? 'No GIFs found' : 'Search for GIFs or set up a GIPHY API key'}</p>
+                  </div>
+                {:else}
+                  <div class="columns-2 gap-1.5">
+                    {#each gifResults as gif (gif.id)}
+                      <button
+                        type="button"
+                        class="w-full mb-1.5 rounded-lg overflow-hidden hover:ring-2 hover:ring-accent transition-all cursor-pointer block"
+                        onclick={() => selectGifOrSticker(gif)}
+                      >
+                        <img src={gif.preview || gif.url} alt={gif.title} loading="lazy" class="w-full h-auto bg-bg-tertiary" />
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="text-[10px] text-text-muted/40 text-center mt-2 pb-1">Powered by GIPHY</p>
+                {/if}
+
+              {:else if pickerTab === 'sticker'}
+                <!-- Sticker grid -->
+                {#if stickerLoading}
+                  <div class="flex items-center justify-center h-full">
+                    <p class="text-sm text-text-muted">Loading stickers...</p>
+                  </div>
+                {:else if stickerResults.length === 0}
+                  <div class="flex flex-col items-center justify-center h-full text-center">
+                    <p class="text-sm text-text-muted">{pickerSearch ? 'No stickers found' : 'Search for stickers or set up a GIPHY API key'}</p>
+                  </div>
+                {:else}
+                  <div class="grid grid-cols-4 gap-2">
+                    {#each stickerResults as sticker (sticker.id)}
+                      <button
+                        type="button"
+                        class="aspect-square rounded-lg overflow-hidden hover:ring-2 hover:ring-accent hover:bg-bg-hover transition-all cursor-pointer flex items-center justify-center p-1"
+                        onclick={() => selectGifOrSticker(sticker)}
+                      >
+                        <img src={sticker.preview || sticker.url} alt={sticker.title} loading="lazy" class="max-w-full max-h-full object-contain" />
+                      </button>
+                    {/each}
+                  </div>
+                  <p class="text-[10px] text-text-muted/40 text-center mt-2 pb-1">Powered by GIPHY</p>
+                {/if}
+              {/if}
+            </div>
+          </div>
+        {/if}
+
         <div class="relative z-10 rounded-xl bg-bg-tertiary border border-border focus-within:border-accent/50 focus-within:shadow-[0_0_0_1px_rgba(20,184,166,0.15)] transition-all duration-150 {replyingTo ? 'border-l-[3px] border-l-accent' : ''}">
         {#if replyingTo}
           <div class="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border/50">
@@ -1317,6 +1706,19 @@
             <button type="button" class="w-5 h-5 rounded-full flex items-center justify-center text-text-muted/50 hover:text-text-primary hover:bg-bg-hover transition-all duration-100" onclick={cancelReply}>
               <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
+          </div>
+        {/if}
+        <!-- GIF/Sticker preview -->
+        {#if pendingGifs.length > 0}
+          <div class="flex items-center gap-2 px-3 py-2.5 overflow-x-auto border-b border-border/50">
+            {#each pendingGifs as pg, i (pg.url + i)}
+              <div class="relative flex-shrink-0 group/gifpreview">
+                <img src={pg.preview} alt={pg.title} class="h-20 max-w-[140px] rounded-md object-contain bg-bg-primary border border-border/50" />
+                <button type="button" class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-danger flex items-center justify-center opacity-0 group-hover/gifpreview:opacity-100 transition-opacity" onclick={() => removePendingGif(i)}>
+                  <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
+            {/each}
           </div>
         {/if}
         <!-- File preview bar -->
@@ -1396,13 +1798,25 @@
               }}
               disabled={isRateLimited || uploading}
               placeholder={uploading ? 'Uploading...' : isRateLimited ? 'Hang on a sec...' : `Message @${activeDmUser.username}`}
-              class="flex-1 min-w-0 bg-transparent text-text-primary py-3 pr-3 text-[14px] focus:outline-none placeholder:text-text-muted/60 disabled:opacity-40"
+              class="flex-1 min-w-0 bg-transparent text-text-primary py-3 pr-1 text-[14px] focus:outline-none placeholder:text-text-muted/60 disabled:opacity-40"
             />
+            <div class="flex items-center flex-shrink-0 pr-1.5 gap-0.5">
+              <button type="button" data-picker-btn class="p-2 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-accent/8" onclick={() => togglePicker('gif')}>
+                <span class="text-[11px] font-bold leading-none">GIF</span>
+              </button>
+              <button type="button" data-picker-btn class="p-2 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-accent/8" onclick={() => togglePicker('sticker')}>
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><circle cx="15.5" cy="8.5" r="1.5"></circle><path d="M9 15c.83.67 1.83 1 3 1s2.17-.33 3-1"></path></svg>
+              </button>
+              <button type="button" data-picker-btn class="p-2 text-text-muted hover:text-accent transition-colors rounded-md hover:bg-accent/8" onclick={() => togglePicker('emoji')}>
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+              </button>
+            </div>
           </div>
           <input type="file" multiple class="hidden" bind:this={fileInputEl} onchange={(e) => { const t = e.target as HTMLInputElement; if (t.files) { addFiles(t.files); t.value = ''; } }} />
         </form>
         </div>
       </div>
+      {/if}
     {:else}
       <!-- Friends View -->
       <div class="h-12 flex-shrink-0 flex items-center px-4 border-b border-border gap-4">
@@ -1558,9 +1972,31 @@
           } catch { /* already hidden locally */ }
         }}
       >Hide from view</button>
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+        onmousedown={() => {
+          const uid = friendData.user.id;
+          const isMuted = friendsStore.isMuted(uid);
+          closeContextMenu();
+          if (isMuted) {
+            friendsStore.unmuteUser(uid);
+          } else {
+            friendsStore.muteUser(uid);
+          }
+        }}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          {#if friendsStore.isMuted(friendData.user.id)}
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+          {:else}
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line>
+          {/if}
+        </svg>
+        {friendsStore.isMuted(friendData.user.id) ? 'Unmute' : 'Mute'}
+      </button>
       <div class="h-px bg-border mx-2 my-1"></div>
       <button
-        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
         onmousedown={() => {
           const fid = friendData.id;
           const fname = friendData.user.display_name || friendData.user.username;
@@ -1577,7 +2013,43 @@
             }
           };
         }}
-      >Remove Friend</button>
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="18" y1="8" x2="23" y2="13"></line><line x1="23" y1="8" x2="18" y2="13"></line></svg>
+        Remove Friend
+      </button>
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+        onmousedown={() => {
+          const fname = friendData.user.display_name || friendData.user.username;
+          const fUserId = friendData.user.id;
+          closeContextMenu();
+          confirmDialog = {
+            title: 'Block User',
+            message: `Block ${fname}? You won't be able to message each other and they'll be removed from your friends.`,
+            danger: true,
+            onConfirm: async () => {
+              await friendsStore.blockUser(fUserId);
+              confirmDialog = null;
+              if (activeDmUser?.id === fUserId) goToFriends();
+            }
+          };
+        }}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+        Block
+      </button>
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+        onmousedown={() => {
+          const fUserId = friendData.user.id;
+          const fname = friendData.user.display_name || friendData.user.username;
+          closeContextMenu();
+          openReportDialog('user', '', { targetUserId: fUserId, targetUsername: fname });
+        }}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        Report
+      </button>
     {:else if contextMenu.type === 'group'}
       {@const chId = contextMenu.channelId}
       {@const chName = contextMenu.channelName}
@@ -1616,6 +2088,139 @@
         }}
       >Delete</button>
     {/if}
+  </div>
+{/if}
+
+<!-- File attachment context menu -->
+{#if fileContextMenu}
+  <div
+    bind:this={fileContextMenuRef}
+    class="fixed bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[160px] z-50"
+    style="left: {fileContextMenu.x}px; top: {fileContextMenu.y}px;"
+  >
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={() => {
+        const url = fileContextMenu!.url;
+        const filename = fileContextMenu!.filename;
+        closeFileContextMenu();
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+      }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      Download
+    </button>
+    <div class="h-px bg-border mx-2 my-1"></div>
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={() => {
+        const mid = fileContextMenu!.messageId;
+        const fname = fileContextMenu!.filename;
+        closeFileContextMenu();
+        openReportDialog('file', mid, fname);
+      }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+      Report
+    </button>
+  </div>
+{/if}
+
+<!-- Message context menu (right-click) -->
+{#if msgContextMenu}
+  <div
+    bind:this={msgContextMenuRef}
+    class="fixed bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[170px] z-50"
+    style="left: {msgContextMenu.x}px; top: {msgContextMenu.y}px;"
+  >
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={() => { const m = msgContextMenu!.msg; closeMsgContextMenu(); startReply(m); }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+      Reply
+    </button>
+    {#if canEdit(msgContextMenu.msg)}
+      <button
+        class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+        onmousedown={() => { const m = msgContextMenu!.msg; closeMsgContextMenu(); startEdit(m); }}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        Edit
+      </button>
+    {/if}
+    <div class="h-px bg-border mx-2 my-1"></div>
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={(e) => { const m = msgContextMenu!.msg; closeMsgContextMenu(); openDeleteMenu(e, m); }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      Delete
+    </button>
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-danger hover:bg-danger/10 transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={() => { const m = msgContextMenu!.msg; closeMsgContextMenu(); openReportDialog('message', m.id); }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+      Report
+    </button>
+  </div>
+{/if}
+
+<!-- Report dialog -->
+{#if reportDialog}
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
+    <div class="fixed inset-0" onclick={() => reportDialog = null}></div>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl relative z-10">
+      {#if reportDialog.success}
+        <div class="text-center py-4">
+          <div class="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-3">
+            <svg class="w-6 h-6 text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <p class="text-text-primary font-semibold">Report sent</p>
+          <p class="text-sm text-text-muted mt-1">Thanks for helping keep Tulpo safe.</p>
+        </div>
+      {:else}
+        <h3 class="text-lg font-semibold text-text-primary mb-1">
+          Report {reportDialog.type === 'file' ? 'file' : reportDialog.type === 'user' ? 'user' : 'message'}
+        </h3>
+        <p class="text-sm text-text-muted mb-4">
+          {#if reportDialog.targetUsername}
+            Reporting <span class="text-text-secondary font-medium">{reportDialog.targetUsername}</span>
+          {:else if reportDialog.filename}
+            Reporting <span class="text-text-secondary font-medium">{reportDialog.filename}</span>
+          {:else}
+            Tell us what's wrong with this message.
+          {/if}
+        </p>
+        <textarea
+          bind:value={reportDialog.reason}
+          placeholder="What's the issue? (optional)"
+          rows={3}
+          class="w-full bg-bg-tertiary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none resize-none mb-4"
+        ></textarea>
+        {#if reportDialog.targetUserId}
+          <label class="flex items-center gap-2 mb-4 cursor-pointer select-none">
+            <input type="checkbox" bind:checked={reportDialog.alsoBlock} class="w-4 h-4 rounded border-border bg-bg-tertiary accent-accent" />
+            <span class="text-sm text-text-secondary">Also block this user</span>
+          </label>
+        {/if}
+        <div class="flex gap-2 justify-end">
+          <button
+            class="px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-hover rounded-lg transition-colors"
+            onclick={() => reportDialog = null}
+          >Cancel</button>
+          <button
+            class="px-4 py-2 text-sm bg-danger text-white rounded-lg hover:bg-danger/90 transition-colors disabled:opacity-50"
+            disabled={reportDialog.submitting}
+            onclick={submitReport}
+          >{reportDialog.submitting ? 'Sending...' : 'Send Report'}</button>
+        </div>
+      {/if}
+    </div>
   </div>
 {/if}
 

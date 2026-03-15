@@ -9,6 +9,7 @@ import { auth } from "./routes/auth";
 import { friends } from "./routes/friends";
 import { settings } from "./routes/settings";
 import { dms } from "./routes/dms";
+import { media } from "./routes/media";
 import { wsHandler, startHeartbeatChecker } from "./ws/handler";
 import { validateSession } from "./lib/auth";
 import { verifySignedUrl } from "./lib/signed-url";
@@ -57,6 +58,7 @@ app.route("/api/auth", auth);
 app.route("/api/friends", friends);
 app.route("/api/settings", settings);
 app.route("/api/dms", dms);
+app.route("/api/media", media);
 
 // Serve static frontend in production
 if (env.isProd) {

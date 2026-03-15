@@ -26,4 +26,6 @@ export const env = {
   // Per-user upload storage quota in bytes (default 500 MB)
   uploadQuotaBytes:
     (Number(process.env.TULPO_UPLOAD_QUOTA_MB) || 500) * 1024 * 1024,
+  // GIPHY API key for GIF/Sticker search
+  giphyApiKey: process.env.TULPO_GIPHY_KEY || null,
 };
