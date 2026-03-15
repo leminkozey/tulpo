@@ -299,45 +299,55 @@
                 {/if}
               </div>
 
-              <!-- Avatar + Identity -->
+              <!-- Avatar + Actions Row -->
               <div class="relative px-4">
+                <!-- Avatar (overlapping banner) -->
                 <div class="absolute -top-10 group">
-                  {#if profileData?.avatar_type !== 'color' && avatarPreview}
-                    <img src={avatarPreview} alt="Avatar" class="w-[80px] h-[80px] rounded-full object-cover border-[5px] border-bg-secondary" />
-                  {:else}
-                    <div class="w-[80px] h-[80px] rounded-full flex items-center justify-center text-2xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {avatarColor}">
-                      {(displayName || auth.user?.username || '?').charAt(0).toUpperCase()}
-                    </div>
-                  {/if}
-                  <!-- Status indicator -->
-                  <div class="absolute bottom-1 right-1 w-5 h-5 rounded-full border-[3px] border-bg-secondary {previewProfile.status === 'online' ? 'bg-success' : previewProfile.status === 'idle' ? 'bg-warning' : previewProfile.status === 'dnd' ? 'bg-danger' : 'bg-text-muted'}"></div>
-                  <!-- Avatar upload overlay -->
-                  <label class="absolute inset-[5px] rounded-full bg-black/0 group-hover:bg-black/50 transition-colors duration-200 flex items-center justify-center cursor-pointer">
-                    <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                  <div class="relative">
+                    {#if profileData?.avatar_type !== 'color' && avatarPreview}
+                      <img src={avatarPreview} alt="Avatar" class="w-[80px] h-[80px] rounded-full object-cover border-[5px] border-bg-secondary" />
+                    {:else}
+                      <div class="w-[80px] h-[80px] rounded-full flex items-center justify-center text-2xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {avatarColor}">
+                        {(displayName || auth.user?.username || '?').charAt(0).toUpperCase()}
+                      </div>
+                    {/if}
+                    <!-- Status indicator -->
+                    <div class="absolute bottom-0.5 right-0.5 w-[18px] h-[18px] rounded-full border-[3px] border-bg-secondary {previewProfile.status === 'online' ? 'bg-success' : previewProfile.status === 'idle' ? 'bg-warning' : previewProfile.status === 'dnd' ? 'bg-danger' : 'bg-text-muted'}"></div>
+                    <!-- Avatar upload overlay -->
+                    <label class="absolute inset-[5px] rounded-full bg-black/0 group-hover:bg-black/50 transition-colors duration-200 flex items-center justify-center cursor-pointer">
+                      <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                      <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
+                    </label>
+                    {#if uploadingAvatar}
+                      <div class="absolute inset-[5px] rounded-full bg-black/50 flex items-center justify-center">
+                        <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Card Body -->
+              <div class="pt-12 px-4 pb-4">
+                <!-- Avatar options row -->
+                <div class="flex items-center gap-1.5 mb-3">
+                  <label class="cursor-pointer px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors">
+                    Upload Image
                     <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
                   </label>
-                  {#if uploadingAvatar}
-                    <div class="absolute inset-[5px] rounded-full bg-black/50 flex items-center justify-center">
-                      <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    </div>
-                  {/if}
-                </div>
-
-                <!-- Avatar actions (right side) -->
-                <div class="flex justify-end pt-2 gap-1.5">
                   {#if profileData?.avatar_type !== 'color'}
                     <button
-                      class="px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors"
+                      class="px-2.5 py-1 text-[11px] text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover rounded-md border border-border transition-colors cursor-pointer"
                       onclick={removeAvatar}
                       disabled={uploadingAvatar}
                     >Use Color</button>
                   {/if}
                   <button
-                    class="px-2.5 py-1 text-[11px] transition-colors rounded-md border border-border {showColorPicker ? 'text-accent bg-accent/10 border-accent/30' : 'text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover'}"
+                    class="px-2.5 py-1 text-[11px] transition-colors rounded-md border border-border cursor-pointer {showColorPicker ? 'text-accent bg-accent/10 border-accent/30' : 'text-text-muted hover:text-text-primary bg-bg-tertiary hover:bg-bg-hover'}"
                     onclick={() => showColorPicker = !showColorPicker}
                   >
                     <span class="inline-flex items-center gap-1.5">
-                      <span class="w-3 h-3 rounded-full inline-block" style="background-color: {avatarColor}"></span>
+                      <span class="w-2.5 h-2.5 rounded-full inline-block" style="background-color: {avatarColor}"></span>
                       Color
                       <svg class="w-3 h-3 transition-transform duration-200 {showColorPicker ? 'rotate-180' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </span>
@@ -346,11 +356,11 @@
 
                 <!-- Collapsible color picker -->
                 {#if showColorPicker}
-                  <div class="mt-2 p-3 bg-bg-primary rounded-lg border border-border">
+                  <div class="mb-3 p-3 bg-bg-primary rounded-lg border border-border">
                     <div class="flex flex-wrap gap-2 justify-center">
                       {#each colorPresets as color}
                         <button
-                          class="w-8 h-8 rounded-full border-2 transition-all duration-150 cursor-pointer {avatarColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-110'}"
+                          class="w-7 h-7 rounded-full border-2 transition-all duration-150 cursor-pointer {avatarColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent hover:scale-110'}"
                           style="background-color: {color}"
                           onclick={() => avatarColor = color}
                         ></button>
@@ -358,10 +368,6 @@
                     </div>
                   </div>
                 {/if}
-              </div>
-
-              <!-- Card Body -->
-              <div class="pt-12 px-4 pb-4">
                 <!-- Display Name -->
                 <input
                   type="text"
