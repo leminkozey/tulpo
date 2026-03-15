@@ -7,22 +7,34 @@
 
 ## Chat Features
 
-- [ ] Message editing (own messages)
-- [ ] Reply to messages (quote + reference)
-- [ ] Image sending (paste, drag & drop, file picker)
-- [ ] Emoji picker & sending
-- [ ] GIF gallery (Tenor/Giphy integration)
-- [ ] File uploads (documents, audio, etc.)
-- [ ] Reactions (emoji + GIF reactions on messages)
-- [ ] Typing indicators
+- [x] Message editing (own messages)
+- [x] Message deletion (for everyone / for me)
+- [x] Reply to messages (quote + reference)
+- [x] Image sending (paste, drag & drop, file picker)
+- [x] Emoji picker & sending
+- [x] GIF gallery (GIPHY integration)
+- [x] File uploads (documents, audio, etc.)
+- [x] Reactions (emoji reactions on messages)
+- [x] Typing indicators
+- [x] Per-chat message drafts
+- [x] Jumbo emoji display (1-5 emoji-only messages)
 - [ ] Search messages
+
+## Social
+
+- [x] Friends system (add, accept, decline)
+- [x] Block / unblock users
+- [x] Mute / unmute users
+- [x] Report users / messages / files
+- [x] Real-time presence (online/offline)
 
 ## Infrastructure
 
 - [ ] Servers (create, join, invite)
 - [ ] Channels (text, voice) within servers
 - [ ] Roles & permissions
-- [ ] User profiles / settings
+- [x] User settings page
+- [ ] User profiles (avatar upload, bio, status)
 - [ ] Themes (Frost theme)
 
 ## Customization & Theming (most requested — 11k+ votes on Discord feedback)
