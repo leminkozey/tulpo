@@ -506,9 +506,11 @@
       activeDmChannelId = channel_id;
       loadDraft(channel_id);
       messages = await api.get<any[]>(`/dms/${channel_id}/messages`);
-      // Track activity from last message or now
+      // Track activity from last message (don't bump if no messages)
       const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
-      dmActivity = { ...dmActivity, [friend.user.id]: lastMsg ? new Date(lastMsg.created_at).getTime() : Date.now() };
+      if (lastMsg) {
+        dmActivity = { ...dmActivity, [friend.user.id]: new Date(lastMsg.created_at).getTime() };
+      }
       await scrollToBottom();
     } catch (err: any) {
       console.error('Failed to open DM:', err);
