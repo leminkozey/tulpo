@@ -4,6 +4,7 @@ import { sendFriendRequestSchema } from "@tulpo/shared";
 import type { PublicUser } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { sendToUser } from "../ws/handler";
+import { signUserUrls } from "../lib/signed-url";
 
 type AuthEnv = {
   Variables: {
@@ -77,7 +78,7 @@ friends.post("/request", async (c) => {
 
     // Notify both users via WS
     sendToUser(target.id, "FRIEND_ACCEPTED", { user: pickPublic(user) });
-    sendToUser(user.id, "FRIEND_ACCEPTED", { user: target });
+    sendToUser(user.id, "FRIEND_ACCEPTED", { user: signUserUrls(target) });
 
     return c.json({ status: "accepted" }, 200);
   }
@@ -144,7 +145,7 @@ friends.post("/:id/accept", async (c) => {
 
   sendToUser(request.user_id, "FRIEND_ACCEPTED", { user: pickPublic(user) });
 
-  return c.json({ status: "accepted", user: sender });
+  return c.json({ status: "accepted", user: signUserUrls(sender) });
 });
 
 // Reject / cancel friend request
@@ -204,7 +205,7 @@ friends.get("/incoming", async (c) => {
   return c.json(
     rows.map((r) => ({
       id: r.id,
-      from: {
+      from: signUserUrls({
         id: r.user_id,
         username: r.username,
         display_name: r.display_name,
@@ -212,7 +213,7 @@ friends.get("/incoming", async (c) => {
         avatar_type: r.avatar_type,
         avatar_color: r.avatar_color,
         status: r.status,
-      },
+      }),
       note: r.note,
       created_at: r.created_at,
     }))
@@ -238,7 +239,7 @@ friends.get("/outgoing", async (c) => {
   return c.json(
     rows.map((r) => ({
       id: r.id,
-      to: {
+      to: signUserUrls({
         id: r.user_id,
         username: r.username,
         display_name: r.display_name,
@@ -246,7 +247,7 @@ friends.get("/outgoing", async (c) => {
         avatar_type: r.avatar_type,
         avatar_color: r.avatar_color,
         status: r.status,
-      },
+      }),
       note: r.note,
       created_at: r.created_at,
     }))
@@ -272,7 +273,7 @@ friends.get("/", async (c) => {
   return c.json(
     rows.map((r) => ({
       id: r.id,
-      user: {
+      user: signUserUrls({
         id: r.user_id,
         username: r.username,
         display_name: r.display_name,
@@ -280,7 +281,7 @@ friends.get("/", async (c) => {
         avatar_type: r.avatar_type,
         avatar_color: r.avatar_color,
         status: r.status,
-      },
+      }),
       note: r.note,
       created_at: r.created_at,
     }))
@@ -346,7 +347,7 @@ friends.get("/blocked", async (c) => {
 
   return c.json(rows.map(r => ({
     id: r.id,
-    user: { id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url, avatar_type: r.avatar_type, avatar_color: r.avatar_color },
+    user: signUserUrls({ id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url, avatar_type: r.avatar_type, avatar_color: r.avatar_color }),
     created_at: r.created_at,
   })));
 });
@@ -419,7 +420,7 @@ friends.post("/report/:userId", async (c) => {
 });
 
 function pickPublic(u: PublicUser): PublicUser {
-  return {
+  return signUserUrls({
     id: u.id,
     username: u.username,
     display_name: u.display_name,
@@ -427,7 +428,7 @@ function pickPublic(u: PublicUser): PublicUser {
     avatar_type: u.avatar_type,
     avatar_color: u.avatar_color,
     status: u.status,
-  };
+  });
 }
 
 export { friends };

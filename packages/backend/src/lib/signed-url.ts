@@ -12,6 +12,17 @@ export function signUrl(path: string): string {
   return `${path}?expires=${expires}&sig=${sig}`;
 }
 
+/** Sign avatar_url (and optionally banner_url) on a user-like object in-place */
+export function signUserUrls<T extends Record<string, any>>(user: T): T {
+  if (user?.avatar_url && typeof user.avatar_url === "string" && user.avatar_url.startsWith("/uploads/")) {
+    user.avatar_url = signUrl(user.avatar_url);
+  }
+  if (user?.banner_url && typeof user.banner_url === "string" && user.banner_url.startsWith("/uploads/")) {
+    user.banner_url = signUrl(user.banner_url);
+  }
+  return user;
+}
+
 export function verifySignedUrl(
   path: string,
   expires: string,

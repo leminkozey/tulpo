@@ -1,6 +1,7 @@
 import { getDb } from "@tulpo/db";
 import { SESSION_DURATION_MS } from "@tulpo/shared";
 import { env } from "./env";
+import { signUserUrls } from "./signed-url";
 
 function peppered(password: string): string {
   return password + env.pepper;
@@ -49,7 +50,7 @@ export function validateSession(token: string) {
     )
     .get(token) as any;
 
-  return row || null;
+  return row ? signUserUrls(row) : null;
 }
 
 export function deleteSession(token: string): void {

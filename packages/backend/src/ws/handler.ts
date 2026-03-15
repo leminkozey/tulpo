@@ -3,6 +3,7 @@ import type { WsMessage } from "@tulpo/shared";
 import type { TulpoWebSocket } from "./types";
 import { validateSession } from "../lib/auth";
 import { getDb } from "@tulpo/db";
+import { signUrl } from "../lib/signed-url";
 
 // Connection pool: userId -> Set of WebSocket connections
 const connections = new Map<string, Set<TulpoWebSocket>>();
@@ -123,7 +124,7 @@ export const wsHandler = {
                 channel_id: payload.channel_id,
                 user_id: ws.data.userId,
                 username: user?.username,
-                avatar_url: user?.avatar_url,
+                avatar_url: user?.avatar_url?.startsWith("/uploads/") ? signUrl(user.avatar_url) : user?.avatar_url,
                 avatar_type: user?.avatar_type,
                 avatar_color: user?.avatar_color,
               });

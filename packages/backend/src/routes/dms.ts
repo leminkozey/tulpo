@@ -4,7 +4,7 @@ import type { PublicUser } from "@tulpo/shared";
 import { BLOCKED_MIME_TYPES, IMAGE_MIME_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { sendToUser } from "../ws/handler";
-import { signUrl } from "../lib/signed-url";
+import { signUrl, signUserUrls } from "../lib/signed-url";
 import { env } from "../lib/env";
 import {
   verifyMagicBytes,
@@ -122,7 +122,7 @@ dms.get("/", async (c) => {
       my_status: ch.my_status,
       left_at: ch.left_at,
       last_message_at: ch.last_message_at,
-      participants,
+      participants: participants.map((p: any) => signUserUrls(p)),
     };
   });
 
@@ -285,6 +285,13 @@ dms.get("/:id/messages", async (c) => {
   }
 
   const messages = rows.reverse();
+
+  // Sign author avatar URLs
+  for (const msg of messages) {
+    if (msg.author_avatar?.startsWith("/uploads/")) {
+      msg.author_avatar = signUrl(msg.author_avatar);
+    }
+  }
 
   // Batch-fetch attachments for all messages
   if (messages.length > 0) {
@@ -1029,7 +1036,7 @@ dms.get("/:id/info", async (c) => {
   return c.json({
     ...channel,
     is_group: !!channel.is_group,
-    participants,
+    participants: participants.map((p: any) => signUserUrls(p)),
   });
 });
 
