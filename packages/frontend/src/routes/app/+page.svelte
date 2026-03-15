@@ -505,12 +505,12 @@
   function addFiles(fileList: FileList | File[]) {
     const maxImageSize = 10 * 1024 * 1024;
     const maxFileSize = 25 * 1024 * 1024;
-    const blocked = ['text/html', 'application/xhtml+xml', 'image/svg+xml', 'application/javascript', 'text/javascript'];
+    const blocked = ['application/javascript', 'text/javascript'];
     const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
     for (const file of fileList) {
       if (blocked.includes(file.type)) {
-        uploadError = `${file.name}: File type not allowed`;
+        uploadError = `Can't upload ${file.name} — that file type isn't supported.`;
         setTimeout(() => uploadError = '', 4000);
         continue;
       }
@@ -518,7 +518,7 @@
       const max = isImage ? maxImageSize : maxFileSize;
       if (file.size > max) {
         const maxMB = Math.round(max / 1024 / 1024);
-        uploadError = `${file.name}: Too large (max ${maxMB} MB)`;
+        uploadError = `${file.name} is too large! Max is ${maxMB} MB.`;
         setTimeout(() => uploadError = '', 4000);
         continue;
       }
@@ -1008,9 +1008,9 @@
         {/if}
       {:else}
         {#if dmSearch.trim()}
-          <p class="text-xs text-text-muted px-2">No results</p>
+          <p class="text-xs text-text-muted px-2">Couldn't find anyone with that name</p>
         {:else if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group).length === 0}
-          <p class="text-xs text-text-muted px-2">Add friends to start chatting</p>
+          <p class="text-xs text-text-muted px-2">It's quiet here. Add some friends to get started!</p>
         {/if}
       {/each}
     </div>
@@ -1447,7 +1447,7 @@
               {/each}
             {/if}
             {#if friendsStore.incoming.length === 0 && friendsStore.outgoing.length === 0}
-              <div class="flex flex-col items-center justify-center py-20 text-center"><p class="text-text-secondary text-sm">No pending friend requests.</p></div>
+              <div class="flex flex-col items-center justify-center py-20 text-center"><p class="text-text-secondary text-sm">No pending requests right now. All caught up!</p></div>
             {/if}
           </div>
         {:else if activeTab === 'online'}
@@ -1467,7 +1467,7 @@
                 </button>
               {/each}
             {:else}
-              <div class="flex flex-col items-center justify-center py-20 text-center"><p class="text-text-secondary text-sm">No friends online right now.</p></div>
+              <div class="flex flex-col items-center justify-center py-20 text-center"><p class="text-text-secondary text-sm">Nobody's around right now. Maybe they're all touching grass?</p></div>
             {/if}
           </div>
         {:else}
@@ -1496,7 +1496,7 @@
                     </div>
                   </div>
                 </div>
-                <p class="text-text-secondary text-sm mb-4">No friends added yet.</p>
+                <p class="text-text-secondary text-sm mb-4">Your friend list is looking a bit lonely. Time to change that!</p>
                 <button onclick={() => activeTab = 'add'} class="bg-accent text-bg-primary font-semibold py-2 px-5 rounded-lg text-sm transition-all duration-150 hover:bg-accent-hover">Add Friend</button>
               </div>
             {/if}
@@ -1850,7 +1850,7 @@
           </button>
         {/each}
         {#if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group && c.my_status === 'hidden').length === 0}
-          <p class="text-sm text-text-muted text-center py-4">No friends to message</p>
+          <p class="text-sm text-text-muted text-center py-4">No one to add yet. Make some friends first!</p>
         {/if}
       </div>
 

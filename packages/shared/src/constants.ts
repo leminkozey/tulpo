@@ -18,11 +18,8 @@ export const IMAGE_MIME_TYPES = [
   "image/webp",
 ] as const;
 
-// Blocked types that should never be uploaded (served inline = XSS risk)
+// Blocked types that should never be uploaded (executable code)
 export const BLOCKED_MIME_TYPES = [
-  "text/html",
-  "application/xhtml+xml",
-  "image/svg+xml",
   "application/javascript",
   "text/javascript",
 ] as const;

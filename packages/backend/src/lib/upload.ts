@@ -72,8 +72,8 @@ export function checkFileSafety(
   buffer: Uint8Array,
   mimeType: string
 ): { safe: boolean; reason?: string } {
-  // Check for HTML/script content in non-text files
-  if (mimeType !== "text/plain") {
+  // Check for HTML/script content in non-text/non-html files (polyglot detection)
+  if (mimeType !== "text/plain" && mimeType !== "text/html" && mimeType !== "application/xhtml+xml" && mimeType !== "image/svg+xml") {
     // Check both head and tail of the file for embedded scripts
     const headSample = new TextDecoder("utf-8", { fatal: false }).decode(
       buffer.slice(0, 8192)
