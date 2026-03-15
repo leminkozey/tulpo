@@ -135,12 +135,6 @@
     if (!file) return;
     input.value = '';
 
-    // GIFs: upload directly without cropping (canvas kills animation)
-    if (file.type === 'image/gif') {
-      uploadDirectly(file, type);
-      return;
-    }
-
     const reader = new FileReader();
     reader.onload = () => {
       cropZoom = 1;
@@ -222,42 +216,48 @@
       const scaleX = cropImageNatural.w / renderedW;
       const scaleY = cropImageNatural.h / renderedH;
 
-      const sx = (cropAreaLeft - imgLeft) * scaleX;
-      const sy = (cropAreaTop - imgTop) * scaleY;
-      const sw = cropAreaW * scaleX;
-      const sh = cropAreaH * scaleY;
+      const sx = Math.max(0, Math.round((cropAreaLeft - imgLeft) * scaleX));
+      const sy = Math.max(0, Math.round((cropAreaTop - imgTop) * scaleY));
+      const sw = Math.min(Math.round(cropAreaW * scaleX), cropImageNatural.w - sx);
+      const sh = Math.min(Math.round(cropAreaH * scaleY), cropImageNatural.h - sy);
 
-      // Draw on canvas
-      const canvas = document.createElement('canvas');
-      canvas.width = outputW;
-      canvas.height = outputH;
-      const ctx = canvas.getContext('2d')!;
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-        img.src = cropModal!.imageSrc;
-      });
-
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputW, outputH);
-
-      // Convert to blob — try webp, fall back to png
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => {
-          if (b && b.type === 'image/webp') {
-            resolve(b);
-          } else {
-            // Browser didn't support webp, use png
-            canvas.toBlob((pb) => resolve(pb!), 'image/png');
-          }
-        }, 'image/webp', 0.9);
-      });
-
-      const ext = blob.type === 'image/webp' ? 'webp' : 'png';
       const formData = new FormData();
-      formData.append('file', new File([blob], `cropped.${ext}`, { type: blob.type }));
+      const isGif = cropModal.file.type === 'image/gif';
+
+      if (isGif) {
+        // GIFs: send original file + crop params, let backend handle with sharp
+        formData.append('file', cropModal.file);
+        formData.append('crop', JSON.stringify({ x: sx, y: sy, w: sw, h: sh }));
+      } else {
+        // Static images: crop on canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = outputW;
+        canvas.height = outputH;
+        const ctx = canvas.getContext('2d')!;
+
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = reject;
+          img.src = cropModal!.imageSrc;
+        });
+
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputW, outputH);
+
+        const blob = await new Promise<Blob>((resolve) => {
+          canvas.toBlob((b) => {
+            if (b && b.type === 'image/webp') {
+              resolve(b);
+            } else {
+              canvas.toBlob((pb) => resolve(pb!), 'image/png');
+            }
+          }, 'image/webp', 0.9);
+        });
+
+        const ext = blob.type === 'image/webp' ? 'webp' : 'png';
+        formData.append('file', new File([blob], `cropped.${ext}`, { type: blob.type }));
+      }
 
       if (isAvatar) {
         const res = await api.upload<{ avatar_url: string; avatar_type: string }>('/profile/avatar', formData);

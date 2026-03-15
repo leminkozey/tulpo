@@ -11,6 +11,7 @@ import {
   scanWithClamAV,
   checkUploadRateLimit,
 } from "../lib/upload";
+import sharp from "sharp";
 import { join } from "path";
 import { mkdir, unlink } from "fs/promises";
 import { randomBytes } from "crypto";
@@ -181,8 +182,30 @@ profile.post("/avatar", async (c) => {
     return c.json({ error: "File failed security scan" }, 400);
   }
 
+  // Parse optional crop parameters (for GIF cropping)
+  const cropRaw = formData.get("crop") as string | null;
+  let cropParams: { x: number; y: number; w: number; h: number } | null = null;
+  if (cropRaw) {
+    try {
+      const parsed = JSON.parse(cropRaw);
+      if (parsed.x >= 0 && parsed.y >= 0 && parsed.w > 0 && parsed.h > 0) {
+        cropParams = { x: Math.round(parsed.x), y: Math.round(parsed.y), w: Math.round(parsed.w), h: Math.round(parsed.h) };
+      }
+    } catch { /* ignore invalid crop params */ }
+  }
+
   // Process image (strip metadata, resize)
-  const processed = await processImage(buffer, mimeType);
+  let processed: Buffer;
+  if (cropParams && mimeType === "image/gif") {
+    // Animated GIF crop: extract region then resize, preserving animation
+    processed = await sharp(buffer, { animated: true })
+      .extract({ left: cropParams.x, top: cropParams.y, width: cropParams.w, height: cropParams.h })
+      .resize(512, 512, { fit: "cover" })
+      .gif()
+      .toBuffer();
+  } else {
+    processed = await processImage(buffer, mimeType);
+  }
 
   // Save file
   const ext = mimeType === "image/gif" ? "gif" : mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
@@ -278,7 +301,28 @@ profile.post("/banner", async (c) => {
     return c.json({ error: "File failed security scan" }, 400);
   }
 
-  const processed = await processImage(buffer, mimeType);
+  // Parse optional crop parameters
+  const cropRaw = formData.get("crop") as string | null;
+  let cropParams: { x: number; y: number; w: number; h: number } | null = null;
+  if (cropRaw) {
+    try {
+      const parsed = JSON.parse(cropRaw);
+      if (parsed.x >= 0 && parsed.y >= 0 && parsed.w > 0 && parsed.h > 0) {
+        cropParams = { x: Math.round(parsed.x), y: Math.round(parsed.y), w: Math.round(parsed.w), h: Math.round(parsed.h) };
+      }
+    } catch { /* ignore */ }
+  }
+
+  let processed: Buffer;
+  if (cropParams && mimeType === "image/gif") {
+    processed = await sharp(buffer, { animated: true })
+      .extract({ left: cropParams.x, top: cropParams.y, width: cropParams.w, height: cropParams.h })
+      .resize(960, 320, { fit: "cover" })
+      .gif()
+      .toBuffer();
+  } else {
+    processed = await processImage(buffer, mimeType);
+  }
 
   const ext = mimeType === "image/gif" ? "gif" : mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : "jpg";
   const filename = `banner_${user.id}_${randomBytes(8).toString("hex")}.${ext}`;
