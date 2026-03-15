@@ -284,7 +284,7 @@
   let editContent = $state('');
 
   // Typing indicator state
-  let typingUsers = $state<Map<string, { username: string; timeout: ReturnType<typeof setTimeout> }>>(new Map());
+  let typingUsers = $state<Map<string, { username: string; avatar_url?: string; avatar_type?: string; avatar_color?: string; timeout: ReturnType<typeof setTimeout> }>>(new Map());
   let lastTypingSent = $state(0);
 
   // File upload state
@@ -750,7 +750,7 @@
           typingUsers.delete(data.user_id);
           typingUsers = new Map(typingUsers);
         }, 5000);
-        typingUsers.set(data.user_id, { username: data.username, timeout });
+        typingUsers.set(data.user_id, { username: data.username, avatar_url: data.avatar_url, avatar_type: data.avatar_type, avatar_color: data.avatar_color, timeout });
         typingUsers = new Map(typingUsers);
       }));
     });
@@ -986,7 +986,7 @@
         // Check if it's a friend (1:1 DM by user ID)
         const friend = friendsStore.friends.find(f => f.user.id === key);
         if (friend) {
-          return { id: key, type: 'friend' as const, name: friend.user.display_name || friend.user.username, initial: friend.user.username.charAt(0).toUpperCase(), count, friend };
+          return { id: key, type: 'friend' as const, name: friend.user.display_name || friend.user.username, initial: friend.user.username.charAt(0).toUpperCase(), avatar_url: friend.user.avatar_url, avatar_color: friend.user.avatar_color, count, friend };
         }
         return null;
       })
@@ -998,11 +998,11 @@
     if (!mentionActive) return [];
     const q = mentionQuery.toLowerCase();
     const isGroup = activeDmUser?.is_group;
-    const users: { id: string; username: string; display_name?: string }[] = isGroup
+    const users: { id: string; username: string; display_name?: string; avatar_url?: string; avatar_color?: string }[] = isGroup
       ? chatParticipants.filter(p => p.id !== auth.user?.id)
-      : activeDmUser ? [{ id: activeDmUser.id, username: activeDmUser.username, display_name: activeDmUser.display_name }] : [];
+      : activeDmUser ? [{ id: activeDmUser.id, username: activeDmUser.username, display_name: activeDmUser.display_name, avatar_url: activeDmUser.avatar_url, avatar_color: activeDmUser.avatar_color }] : [];
     // Add @everyone for groups
-    const everyone = isGroup ? [{ id: '__everyone__', username: 'everyone', display_name: 'Notify all members' }] : [];
+    const everyone: typeof users = isGroup ? [{ id: '__everyone__', username: 'everyone', display_name: 'Notify all members' }] : [];
     const all = [...everyone, ...users];
     if (!q) return all.slice(0, 8);
     return all.filter(u =>
@@ -1344,8 +1344,10 @@
       >
         {#if item.type === 'group'}
           <svg class="w-5 h-5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        {:else if item.avatar_url}
+          <img src={item.avatar_url} alt="" class="w-full h-full rounded-2xl group-hover:rounded-xl transition-all duration-200 object-cover" />
         {:else}
-          <span class="text-sm font-bold text-accent">{item.initial}</span>
+          <span class="text-sm font-bold" style="color: {item.avatar_color || '#14b8a6'}">{item.initial}</span>
         {/if}
         <span class="absolute -top-1 -right-1 bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{item.count}</span>
       </button>
@@ -1419,9 +1421,11 @@
             oncontextmenu={(e) => handleContextMenu(e, 'friend', { friend: friend })}
           >
             <div class="relative flex-shrink-0">
-              <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">
-                {friend.user.username.charAt(0).toUpperCase()}
-              </div>
+              {#if friend.user.avatar_type !== 'color' && friend.user.avatar_url}
+                <img src={friend.user.avatar_url} alt="" class="w-8 h-8 rounded-full object-cover" />
+              {:else}
+                <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background-color: {friend.user.avatar_color || '#14b8a6'}">{friend.user.username.charAt(0).toUpperCase()}</div>
+              {/if}
               <div
                 class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-bg-secondary"
                 class:bg-success={friend.user.status === 'online'}
@@ -1448,7 +1452,11 @@
     <!-- User area -->
     <div class="h-[52px] flex items-center gap-2 px-2 bg-bg-primary/50 border-t border-border relative">
       <div class="relative">
-        <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">{auth.user?.username?.charAt(0).toUpperCase() ?? '?'}</div>
+        {#if auth.user?.avatar_type !== 'color' && auth.user?.avatar_url}
+          <img src={auth.user.avatar_url} alt="" class="w-8 h-8 rounded-full object-cover" />
+        {:else}
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background-color: {auth.user?.avatar_color || '#14b8a6'}">{auth.user?.username?.charAt(0).toUpperCase() ?? '?'}</div>
+        {/if}
         <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary" class:bg-success={wsClient.status === 'connected'} class:bg-warning={wsClient.status === 'connecting' || wsClient.status === 'reconnecting'} class:bg-danger={wsClient.status === 'disconnected'}></div>
       </div>
       <div class="flex-1 min-w-0">
@@ -1472,7 +1480,11 @@
               <svg class="w-3.5 h-3.5 text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             </div>
           {:else}
-            <div class="w-6 h-6 rounded-full bg-accent/15 flex items-center justify-center text-[10px] font-bold text-accent">{activeDmUser.username.charAt(0).toUpperCase()}</div>
+            {#if activeDmUser.avatar_type !== 'color' && activeDmUser.avatar_url}
+              <img src={activeDmUser.avatar_url} alt="" class="w-6 h-6 rounded-full object-cover" />
+            {:else}
+              <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background-color: {activeDmUser.avatar_color || '#14b8a6'}">{activeDmUser.username.charAt(0).toUpperCase()}</div>
+            {/if}
             <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-primary" class:bg-success={activeDmUser.status === 'online'} class:bg-text-muted={activeDmUser.status !== 'online'}></div>
           {/if}
         </div>
@@ -1507,7 +1519,11 @@
         {:else if messages.length === 0}
           <div class="flex flex-col items-center justify-center h-full text-center">
             <div class="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-              <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-lg font-bold text-accent">{activeDmUser.username.charAt(0).toUpperCase()}</div>
+              {#if activeDmUser.avatar_type !== 'color' && activeDmUser.avatar_url}
+                <img src={activeDmUser.avatar_url} alt="" class="w-10 h-10 rounded-full object-cover" />
+              {:else}
+                <div class="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white" style="background-color: {activeDmUser.avatar_color || '#14b8a6'}">{activeDmUser.username.charAt(0).toUpperCase()}</div>
+              {/if}
             </div>
             <h3 class="text-xl font-bold text-text-primary mb-1">{activeDmUser.display_name || activeDmUser.username}</h3>
             <p class="text-sm text-text-secondary">This is the beginning of your conversation.</p>
@@ -1553,8 +1569,12 @@
                     </button>
                   {/if}
                   <div class="flex items-start gap-3">
-                    <button class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-[13px] font-bold text-accent flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer" onclick={() => openProfileCard(msg.author_id)}>
-                      {msg.author_username.charAt(0).toUpperCase()}
+                    <button class="w-10 h-10 rounded-full flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer overflow-hidden" onclick={() => openProfileCard(msg.author_id)}>
+                      {#if msg.author_avatar_type !== 'color' && msg.author_avatar}
+                        <img src={msg.author_avatar} alt="" class="w-10 h-10 rounded-full object-cover" />
+                      {:else}
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center text-[13px] font-bold text-white" style="background-color: {msg.author_avatar_color || '#14b8a6'}">{msg.author_username.charAt(0).toUpperCase()}</div>
+                      {/if}
                     </button>
                     <div class="flex-1 min-w-0 pt-0.5">
                       <div class="flex items-baseline gap-2">
@@ -1813,10 +1833,16 @@
             <div class="flex items-end -space-x-5">
               {#each typingUsersList.slice(0, 5) as typer, i (typer.username)}
                 <div
-                  class="w-12 h-12 rounded-full bg-[#1c3f3b] border-[3px] border-bg-primary flex items-center justify-center text-[16px] font-bold text-accent relative"
+                  class="w-12 h-12 rounded-full border-[3px] border-bg-primary relative overflow-hidden"
                   style="z-index: {5 - i}; animation: typing-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) {i * 0.1}s both"
                 >
-                  {typer.username.charAt(0).toUpperCase()}
+                  {#if typer.avatar_url}
+                    <img src={typer.avatar_url} alt="" class="w-full h-full rounded-full object-cover" />
+                  {:else}
+                    <div class="w-full h-full rounded-full flex items-center justify-center text-[16px] font-bold" style="background-color: {typer.avatar_color || '#14b8a6'}20; color: {typer.avatar_color || '#14b8a6'}">
+                      {typer.username.charAt(0).toUpperCase()}
+                    </div>
+                  {/if}
                 </div>
               {/each}
               {#if typingUsersList.length > 5}
@@ -2007,8 +2033,12 @@
                     <span class="text-sm text-warning font-medium truncate">@everyone</span>
                     <span class="text-xs text-text-muted truncate ml-auto">Notify all</span>
                   {:else}
-                    <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-[11px] font-bold text-accent flex-shrink-0">
-                      {user.username.charAt(0).toUpperCase()}
+                    <div class="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                      {#if user.avatar_url}
+                        <img src={user.avatar_url} alt="" class="w-full h-full object-cover" />
+                      {:else}
+                        <div class="w-full h-full flex items-center justify-center text-[11px] font-bold" style="background-color: {user.avatar_color || '#14b8a6'}20; color: {user.avatar_color || '#14b8a6'}">{user.username.charAt(0).toUpperCase()}</div>
+                      {/if}
                     </div>
                     <span class="text-sm text-text-primary truncate">{user.display_name || user.username}</span>
                     {#if user.display_name && user.display_name !== user.username}
@@ -2101,7 +2131,13 @@
               <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-[0.05em] px-2 mb-2">Incoming — {friendsStore.incoming.length}</h3>
               {#each friendsStore.incoming as request (request.id)}
                 <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150">
-                  <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">{request.from.username.charAt(0).toUpperCase()}</div>
+                  <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden">
+                    {#if request.from.avatar_url}
+                      <img src={request.from.avatar_url} alt="" class="w-full h-full rounded-full object-cover" />
+                    {:else}
+                      <div class="w-full h-full rounded-full flex items-center justify-center text-xs font-bold" style="background-color: {request.from.avatar_color || '#14b8a6'}20; color: {request.from.avatar_color || '#14b8a6'}">{request.from.username.charAt(0).toUpperCase()}</div>
+                    {/if}
+                  </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-text-primary">{request.from.display_name || request.from.username}</p>
                     <p class="text-[11px] text-text-muted">{request.from.username}{#if request.note}<span class="ml-1 text-text-secondary">— {request.note}</span>{/if}</p>
@@ -2121,7 +2157,13 @@
               <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-[0.05em] px-2 mb-2 {friendsStore.incoming.length > 0 ? 'mt-6' : ''}">Outgoing — {friendsStore.outgoing.length}</h3>
               {#each friendsStore.outgoing as request (request.id)}
                 <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150">
-                  <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">{request.to.username.charAt(0).toUpperCase()}</div>
+                  <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden">
+                    {#if request.to.avatar_url}
+                      <img src={request.to.avatar_url} alt="" class="w-full h-full rounded-full object-cover" />
+                    {:else}
+                      <div class="w-full h-full rounded-full flex items-center justify-center text-xs font-bold" style="background-color: {request.to.avatar_color || '#14b8a6'}20; color: {request.to.avatar_color || '#14b8a6'}">{request.to.username.charAt(0).toUpperCase()}</div>
+                    {/if}
+                  </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-text-primary">{request.to.display_name || request.to.username}</p>
                     <p class="text-[11px] text-text-muted">{request.to.username}{#if request.note}<span class="ml-1 text-text-secondary">— {request.note}</span>{/if}</p>
@@ -2143,7 +2185,13 @@
               {#each onlineFriends as friend (friend.id)}
                 <button onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left">
                   <div class="relative">
-                    <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">{friend.user.username.charAt(0).toUpperCase()}</div>
+                    <div class="w-8 h-8 rounded-full overflow-hidden">
+                      {#if friend.user.avatar_url}
+                        <img src={friend.user.avatar_url} alt="" class="w-full h-full object-cover" />
+                      {:else}
+                        <div class="w-full h-full flex items-center justify-center text-xs font-bold" style="background-color: {friend.user.avatar_color || '#14b8a6'}20; color: {friend.user.avatar_color || '#14b8a6'}">{friend.user.username.charAt(0).toUpperCase()}</div>
+                      {/if}
+                    </div>
                     <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-primary bg-success"></div>
                   </div>
                   <div class="flex-1 min-w-0">
@@ -2163,7 +2211,13 @@
               {#each allFriends as friend (friend.id)}
                 <button onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left">
                   <div class="relative">
-                    <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">{friend.user.username.charAt(0).toUpperCase()}</div>
+                    <div class="w-8 h-8 rounded-full overflow-hidden">
+                      {#if friend.user.avatar_url}
+                        <img src={friend.user.avatar_url} alt="" class="w-full h-full object-cover" />
+                      {:else}
+                        <div class="w-full h-full flex items-center justify-center text-xs font-bold" style="background-color: {friend.user.avatar_color || '#14b8a6'}20; color: {friend.user.avatar_color || '#14b8a6'}">{friend.user.username.charAt(0).toUpperCase()}</div>
+                      {/if}
+                    </div>
                     <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-primary" class:bg-success={friend.user.status === 'online'} class:bg-warning={friend.user.status === 'idle'} class:bg-danger={friend.user.status === 'dnd'} class:bg-text-muted={friend.user.status === 'offline'}></div>
                   </div>
                   <div class="flex-1 min-w-0">
@@ -2517,8 +2571,12 @@
         <div class="space-y-1">
           {#each groupInfo.participants?.filter((p: any) => p.member_status === 'active') as member (member.id)}
             <div class="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-bg-hover/50 transition-colors">
-              <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
-                {member.username.charAt(0).toUpperCase()}
+              <div class="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                {#if member.avatar_url}
+                  <img src={member.avatar_url} alt="" class="w-full h-full object-cover" />
+                {:else}
+                  <div class="w-full h-full flex items-center justify-center text-xs font-bold" style="background-color: {member.avatar_color || '#14b8a6'}20; color: {member.avatar_color || '#14b8a6'}">{member.username.charAt(0).toUpperCase()}</div>
+                {/if}
               </div>
               <span class="text-sm text-text-secondary flex-1">{member.display_name || member.username}</span>
               {#if member.id === groupInfo.owner_id}
@@ -2557,8 +2615,12 @@
               }
             }}
           >
-            <div class="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
-              {friend.user.username.charAt(0).toUpperCase()}
+            <div class="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+              {#if friend.user.avatar_url}
+                <img src={friend.user.avatar_url} alt="" class="w-full h-full object-cover" />
+              {:else}
+                <div class="w-full h-full flex items-center justify-center text-xs font-bold" style="background-color: {friend.user.avatar_color || '#14b8a6'}20; color: {friend.user.avatar_color || '#14b8a6'}">{friend.user.username.charAt(0).toUpperCase()}</div>
+              {/if}
             </div>
             <span class="text-sm text-text-secondary flex-1">{friend.user.display_name || friend.user.username}</span>
             {#if addMembersSelected.includes(friend.user.id)}
@@ -2735,8 +2797,12 @@
             class="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left {selectedForGroup.includes(friend.user.id) ? 'bg-accent/10' : 'hover:bg-bg-hover/50'}"
             onclick={() => toggleGroupMember(friend.user.id)}
           >
-            <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
-              {friend.user.username.charAt(0).toUpperCase()}
+            <div class="w-8 h-8 rounded-full flex-shrink-0 overflow-hidden">
+              {#if friend.user.avatar_url}
+                <img src={friend.user.avatar_url} alt="" class="w-full h-full object-cover" />
+              {:else}
+                <div class="w-full h-full flex items-center justify-center text-xs font-bold" style="background-color: {friend.user.avatar_color || '#14b8a6'}20; color: {friend.user.avatar_color || '#14b8a6'}">{friend.user.username.charAt(0).toUpperCase()}</div>
+              {/if}
             </div>
             <span class="text-sm text-text-secondary flex-1">{friend.user.display_name || friend.user.username}</span>
             {#if selectedForGroup.includes(friend.user.id)}

@@ -106,7 +106,7 @@ dms.get("/", async (c) => {
   const result = channels.map((ch: any) => {
     const participants = db
       .query(
-        `SELECT u.id, u.username, u.display_name, u.avatar_url, u.status
+        `SELECT u.id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status
          FROM dm_participants dp
          JOIN users u ON dp.user_id = u.id
          WHERE dp.dm_channel_id = ? AND dp.user_id != ?`
@@ -250,6 +250,7 @@ dms.get("/:id/messages", async (c) => {
   const baseSelect = `SELECT m.id, m.content, m.created_at, m.edited_at,
                 u.id as author_id, u.username as author_username,
                 u.display_name as author_display_name, u.avatar_url as author_avatar,
+                u.avatar_type as author_avatar_type, u.avatar_color as author_avatar_color,
                 m.reply_to_id,
                 CASE WHEN rm.deleted_at IS NOT NULL THEN NULL ELSE rm.content END as reply_to_content,
                 ru.username as reply_to_author_username,
@@ -587,6 +588,8 @@ dms.post("/:id/messages", async (c) => {
     author_username: user.username,
     author_display_name: user.display_name,
     author_avatar: user.avatar_url,
+    author_avatar_type: user.avatar_type,
+    author_avatar_color: user.avatar_color,
     reply_to_id: replyData?.reply_to_id || null,
     reply_to_content: replyData?.reply_to_content || null,
     reply_to_author_username: replyData?.reply_to_author_username || null,
@@ -709,6 +712,8 @@ dms.post("/:id/leave", async (c) => {
     author_username: user.username,
     author_display_name: user.display_name,
     author_avatar: user.avatar_url,
+    author_avatar_type: user.avatar_type,
+    author_avatar_color: user.avatar_color,
     is_system: true,
   };
 
@@ -963,6 +968,8 @@ dms.delete("/:id/members/:userId", async (c) => {
     author_username: user.username,
     author_display_name: user.display_name,
     author_avatar: user.avatar_url,
+    author_avatar_type: user.avatar_type,
+    author_avatar_color: user.avatar_color,
     is_system: true,
   };
 
@@ -1012,7 +1019,7 @@ dms.get("/:id/info", async (c) => {
 
   const participants = db
     .query(
-      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.status, dp.status as member_status
+      `SELECT u.id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status, dp.status as member_status
        FROM dm_participants dp
        JOIN users u ON dp.user_id = u.id
        WHERE dp.dm_channel_id = ?`

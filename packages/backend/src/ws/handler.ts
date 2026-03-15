@@ -111,7 +111,7 @@ export const wsHandler = {
             if (!participant) break;
 
             const user = db
-              .query("SELECT username, avatar_url FROM users WHERE id = ?")
+              .query("SELECT username, avatar_url, avatar_type, avatar_color FROM users WHERE id = ?")
               .get(ws.data.userId) as any;
 
             const others = db
@@ -123,6 +123,9 @@ export const wsHandler = {
                 channel_id: payload.channel_id,
                 user_id: ws.data.userId,
                 username: user?.username,
+                avatar_url: user?.avatar_url,
+                avatar_type: user?.avatar_type,
+                avatar_color: user?.avatar_color,
               });
             }
           }

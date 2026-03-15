@@ -40,7 +40,7 @@ friends.post("/request", async (c) => {
   // Find target user
   const target = db
     .query(
-      "SELECT id, username, display_name, avatar_url, status FROM users WHERE username = ?"
+      "SELECT id, username, display_name, avatar_url, avatar_type, avatar_color, status FROM users WHERE username = ?"
     )
     .get(username) as PublicUser | null;
 
@@ -139,7 +139,7 @@ friends.post("/:id/accept", async (c) => {
 
   // Get sender info for WS notification
   const sender = db
-    .query("SELECT id, username, display_name, avatar_url, status FROM users WHERE id = ?")
+    .query("SELECT id, username, display_name, avatar_url, avatar_type, avatar_color, status FROM users WHERE id = ?")
     .get(request.user_id) as PublicUser;
 
   sendToUser(request.user_id, "FRIEND_ACCEPTED", { user: pickPublic(user) });
@@ -193,7 +193,7 @@ friends.get("/incoming", async (c) => {
   const rows = db
     .query(
       `SELECT f.id, f.note, f.created_at,
-              u.id as user_id, u.username, u.display_name, u.avatar_url, u.status
+              u.id as user_id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status
        FROM friends f
        JOIN users u ON f.user_id = u.id
        WHERE f.friend_id = ? AND f.status = 'pending'
@@ -209,6 +209,8 @@ friends.get("/incoming", async (c) => {
         username: r.username,
         display_name: r.display_name,
         avatar_url: r.avatar_url,
+        avatar_type: r.avatar_type,
+        avatar_color: r.avatar_color,
         status: r.status,
       },
       note: r.note,
@@ -225,7 +227,7 @@ friends.get("/outgoing", async (c) => {
   const rows = db
     .query(
       `SELECT f.id, f.note, f.created_at,
-              u.id as user_id, u.username, u.display_name, u.avatar_url, u.status
+              u.id as user_id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status
        FROM friends f
        JOIN users u ON f.friend_id = u.id
        WHERE f.user_id = ? AND f.status = 'pending'
@@ -241,6 +243,8 @@ friends.get("/outgoing", async (c) => {
         username: r.username,
         display_name: r.display_name,
         avatar_url: r.avatar_url,
+        avatar_type: r.avatar_type,
+        avatar_color: r.avatar_color,
         status: r.status,
       },
       note: r.note,
@@ -257,7 +261,7 @@ friends.get("/", async (c) => {
   const rows = db
     .query(
       `SELECT f.id, f.note, f.created_at,
-              u.id as user_id, u.username, u.display_name, u.avatar_url, u.status
+              u.id as user_id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status
        FROM friends f
        JOIN users u ON f.friend_id = u.id
        WHERE f.user_id = ? AND f.status = 'accepted'
@@ -273,6 +277,8 @@ friends.get("/", async (c) => {
         username: r.username,
         display_name: r.display_name,
         avatar_url: r.avatar_url,
+        avatar_type: r.avatar_type,
+        avatar_color: r.avatar_color,
         status: r.status,
       },
       note: r.note,
@@ -331,7 +337,7 @@ friends.get("/blocked", async (c) => {
 
   const rows = db.query(
     `SELECT b.id, b.created_at,
-            u.id as user_id, u.username, u.display_name, u.avatar_url
+            u.id as user_id, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color
      FROM user_blocks b
      JOIN users u ON b.blocked_id = u.id
      WHERE b.user_id = ?
@@ -340,7 +346,7 @@ friends.get("/blocked", async (c) => {
 
   return c.json(rows.map(r => ({
     id: r.id,
-    user: { id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url },
+    user: { id: r.user_id, username: r.username, display_name: r.display_name, avatar_url: r.avatar_url, avatar_type: r.avatar_type, avatar_color: r.avatar_color },
     created_at: r.created_at,
   })));
 });
@@ -418,6 +424,8 @@ function pickPublic(u: PublicUser): PublicUser {
     username: u.username,
     display_name: u.display_name,
     avatar_url: u.avatar_url,
+    avatar_type: u.avatar_type,
+    avatar_color: u.avatar_color,
     status: u.status,
   };
 }
