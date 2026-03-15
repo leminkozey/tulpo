@@ -99,11 +99,47 @@
     }
   }
 
+  async function uploadDirectly(file: File, type: 'avatar' | 'banner') {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      if (type === 'avatar') {
+        uploadingAvatar = true;
+        const res = await api.upload<{ avatar_url: string; avatar_type: string }>('/profile/avatar', formData);
+        avatarPreview = res.avatar_url;
+        if (profileData) {
+          profileData = { ...profileData, avatar_url: res.avatar_url, avatar_type: res.avatar_type as any };
+        }
+        profileMessage = { type: 'success', text: 'Avatar updated!' };
+      } else {
+        uploadingBanner = true;
+        const res = await api.upload<{ banner_url: string }>('/profile/banner', formData);
+        bannerPreview = res.banner_url;
+        if (profileData) {
+          profileData = { ...profileData, banner_url: res.banner_url };
+        }
+        profileMessage = { type: 'success', text: 'Banner updated!' };
+      }
+      setTimeout(() => profileMessage = null, 3000);
+    } catch (err: any) {
+      profileMessage = { type: 'error', text: err.message || 'Failed to upload' };
+    } finally {
+      uploadingAvatar = false;
+      uploadingBanner = false;
+    }
+  }
+
   function openCropModal(e: Event, type: 'avatar' | 'banner') {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
     input.value = '';
+
+    // GIFs: upload directly without cropping (canvas kills animation)
+    if (file.type === 'image/gif') {
+      uploadDirectly(file, type);
+      return;
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
