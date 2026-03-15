@@ -25,6 +25,20 @@
   let profileMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
   let showColorPicker = $state(false);
 
+  // Image crop modal
+  let cropModal = $state<{
+    type: 'avatar' | 'banner';
+    imageSrc: string;
+    file: File;
+  } | null>(null);
+  let cropZoom = $state(1);
+  let cropOffset = $state({ x: 0, y: 0 });
+  let cropDragging = $state(false);
+  let cropDragStart = $state({ x: 0, y: 0 });
+  let cropImageNatural = $state({ w: 0, h: 0 });
+  let cropContainerEl = $state<HTMLDivElement | null>(null);
+  let cropUploading = $state(false);
+
   // External link warning
   let externalLinkWarning = $state<{ url: string; label: string } | null>(null);
 
@@ -85,27 +99,143 @@
     }
   }
 
-  async function uploadAvatar(e: Event) {
+  function openCropModal(e: Event, type: 'avatar' | 'banner') {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    input.value = '';
 
-    uploadingAvatar = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      cropZoom = 1;
+      cropOffset = { x: 0, y: 0 };
+      cropImageNatural = { w: 0, h: 0 };
+      cropModal = { type, imageSrc: reader.result as string, file };
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function onCropImageLoad(e: Event) {
+    const img = e.target as HTMLImageElement;
+    cropImageNatural = { w: img.naturalWidth, h: img.naturalHeight };
+  }
+
+  function onCropPointerDown(e: PointerEvent) {
+    cropDragging = true;
+    cropDragStart = { x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function onCropPointerMove(e: PointerEvent) {
+    if (!cropDragging) return;
+    cropOffset = {
+      x: e.clientX - cropDragStart.x,
+      y: e.clientY - cropDragStart.y,
+    };
+  }
+
+  function onCropPointerUp() {
+    cropDragging = false;
+  }
+
+  function onCropWheel(e: WheelEvent) {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    cropZoom = Math.max(1, Math.min(5, cropZoom + delta));
+  }
+
+  async function applyCrop() {
+    if (!cropModal || !cropContainerEl) return;
+    cropUploading = true;
+
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.upload<{ avatar_url: string; avatar_type: string }>('/profile/avatar', formData);
-      avatarPreview = res.avatar_url;
-      if (profileData) {
-        profileData = { ...profileData, avatar_url: res.avatar_url, avatar_type: res.avatar_type as any };
+      const isAvatar = cropModal.type === 'avatar';
+      const outputW = isAvatar ? 512 : 960;
+      const outputH = isAvatar ? 512 : 320;
+
+      const containerRect = cropContainerEl.getBoundingClientRect();
+      const viewportW = containerRect.width;
+      const viewportH = containerRect.height;
+
+      // The image is rendered to fill the container with object-fit logic + zoom + offset
+      const imgAspect = cropImageNatural.w / cropImageNatural.h;
+      const containerAspect = viewportW / viewportH;
+      let renderedW: number, renderedH: number;
+      if (imgAspect > containerAspect) {
+        renderedH = viewportH;
+        renderedW = viewportH * imgAspect;
+      } else {
+        renderedW = viewportW;
+        renderedH = viewportW / imgAspect;
       }
-      profileMessage = { type: 'success', text: 'Avatar updated!' };
+      renderedW *= cropZoom;
+      renderedH *= cropZoom;
+
+      // Image top-left in container coords
+      const imgLeft = (viewportW - renderedW) / 2 + cropOffset.x;
+      const imgTop = (viewportH - renderedH) / 2 + cropOffset.y;
+
+      // The crop area (visible area) maps to the center of the container
+      // For avatar: circle inscribed in container, for banner: full container
+      const cropAreaLeft = isAvatar ? (viewportW - Math.min(viewportW, viewportH)) / 2 : 0;
+      const cropAreaTop = isAvatar ? (viewportH - Math.min(viewportW, viewportH)) / 2 : 0;
+      const cropAreaW = isAvatar ? Math.min(viewportW, viewportH) : viewportW;
+      const cropAreaH = isAvatar ? Math.min(viewportW, viewportH) : viewportH;
+
+      // Map crop area back to image natural pixels
+      const scaleX = cropImageNatural.w / renderedW;
+      const scaleY = cropImageNatural.h / renderedH;
+
+      const sx = (cropAreaLeft - imgLeft) * scaleX;
+      const sy = (cropAreaTop - imgTop) * scaleY;
+      const sw = cropAreaW * scaleX;
+      const sh = cropAreaH * scaleY;
+
+      // Draw on canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = outputW;
+      canvas.height = outputH;
+      const ctx = canvas.getContext('2d')!;
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = cropModal!.imageSrc;
+      });
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputW, outputH);
+
+      // Convert to blob
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/webp', 0.9);
+      });
+
+      const formData = new FormData();
+      formData.append('file', blob, `cropped.webp`);
+
+      if (isAvatar) {
+        const res = await api.upload<{ avatar_url: string; avatar_type: string }>('/profile/avatar', formData);
+        avatarPreview = res.avatar_url;
+        if (profileData) {
+          profileData = { ...profileData, avatar_url: res.avatar_url, avatar_type: res.avatar_type as any };
+        }
+        profileMessage = { type: 'success', text: 'Avatar updated!' };
+      } else {
+        const res = await api.upload<{ banner_url: string }>('/profile/banner', formData);
+        bannerPreview = res.banner_url;
+        if (profileData) {
+          profileData = { ...profileData, banner_url: res.banner_url };
+        }
+        profileMessage = { type: 'success', text: 'Banner updated!' };
+      }
       setTimeout(() => profileMessage = null, 3000);
+      cropModal = null;
     } catch (err: any) {
-      profileMessage = { type: 'error', text: err.message || 'Failed to upload avatar' };
+      profileMessage = { type: 'error', text: err.message || 'Failed to upload' };
     } finally {
-      uploadingAvatar = false;
-      input.value = '';
+      cropUploading = false;
     }
   }
 
@@ -119,30 +249,6 @@
       }
     } finally {
       uploadingAvatar = false;
-    }
-  }
-
-  async function uploadBanner(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    uploadingBanner = true;
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await api.upload<{ banner_url: string }>('/profile/banner', formData);
-      bannerPreview = res.banner_url;
-      if (profileData) {
-        profileData = { ...profileData, banner_url: res.banner_url };
-      }
-      profileMessage = { type: 'success', text: 'Banner updated!' };
-      setTimeout(() => profileMessage = null, 3000);
-    } catch (err: any) {
-      profileMessage = { type: 'error', text: err.message || 'Failed to upload banner' };
-    } finally {
-      uploadingBanner = false;
-      input.value = '';
     }
   }
 
@@ -285,7 +391,7 @@
                     <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-200 flex items-center justify-center gap-2">
                       <label class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer px-3 py-1.5 bg-bg-secondary/90 backdrop-blur-sm rounded-lg text-[12px] text-text-primary hover:bg-bg-hover border border-border">
                         {bannerPreview ? 'Change' : 'Upload'}
-                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadBanner} disabled={uploadingBanner} />
+                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={(e: Event) => openCropModal(e, 'banner')} disabled={uploadingBanner} />
                       </label>
                       {#if bannerPreview}
                         <button
@@ -318,7 +424,7 @@
                       {/if}
                       <label class="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/50 transition-colors duration-200 flex items-center justify-center cursor-pointer">
                         <svg class="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
+                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={(e: Event) => openCropModal(e, 'avatar')} disabled={uploadingAvatar} />
                       </label>
                       {#if uploadingAvatar}
                         <div class="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
@@ -331,7 +437,7 @@
                       <div class="flex items-center gap-1.5">
                         <label class="cursor-pointer px-3 py-1.5 text-[12px] text-text-primary bg-accent hover:bg-accent-hover rounded-md transition-colors font-medium">
                           Upload Image
-                          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} disabled={uploadingAvatar} />
+                          <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={(e: Event) => openCropModal(e, 'avatar')} disabled={uploadingAvatar} />
                         </label>
                         {#if profileData?.avatar_type !== 'color'}
                           <button
@@ -562,6 +668,109 @@
     </div>
   </div>
 </div>
+
+<!-- Image Crop Modal -->
+{#if cropModal}
+  <div class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center">
+    <div class="bg-bg-secondary border border-border rounded-xl shadow-2xl w-[520px] max-w-[95vw] flex flex-col" onclick={(e) => e.stopPropagation()}>
+      <!-- Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-border">
+        <h3 class="text-[15px] font-semibold text-text-primary">
+          {cropModal.type === 'avatar' ? 'Edit Avatar' : 'Edit Banner'}
+        </h3>
+        <button
+          class="w-7 h-7 rounded-full bg-bg-tertiary hover:bg-bg-hover flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
+          onclick={() => cropModal = null}
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+
+      <!-- Crop area -->
+      <div class="relative mx-5 mt-4 overflow-hidden rounded-lg bg-black/90 select-none"
+        style="height: {cropModal.type === 'avatar' ? '340px' : '200px'}"
+        bind:this={cropContainerEl}
+        onpointerdown={onCropPointerDown}
+        onpointermove={onCropPointerMove}
+        onpointerup={onCropPointerUp}
+        onpointercancel={onCropPointerUp}
+        onwheel={onCropWheel}
+        role="application"
+        aria-label="Drag to reposition, scroll to zoom"
+      >
+        <!-- Image -->
+        <img
+          src={cropModal.imageSrc}
+          alt="Crop preview"
+          class="absolute pointer-events-none"
+          style="
+            left: 50%; top: 50%;
+            transform: translate(calc(-50% + {cropOffset.x}px), calc(-50% + {cropOffset.y}px)) scale({cropZoom});
+            min-width: 100%; min-height: 100%;
+            object-fit: contain;
+            max-width: none; max-height: none;
+            width: auto; height: 100%;
+          "
+          onload={onCropImageLoad}
+          draggable="false"
+        />
+
+        <!-- Overlay mask -->
+        {#if cropModal.type === 'avatar'}
+          <!-- Circle mask using radial gradient -->
+          <div class="absolute inset-0 pointer-events-none" style="
+            background: radial-gradient(circle at center, transparent 35%, rgba(0,0,0,0.6) 36%);
+          "></div>
+          <!-- Circle border -->
+          <div class="absolute pointer-events-none border-2 border-white/40 rounded-full"
+            style="
+              width: min(70%, 280px); height: min(70%, 280px);
+              left: 50%; top: 50%;
+              transform: translate(-50%, -50%);
+            "
+          ></div>
+        {:else}
+          <!-- Banner: subtle border around the whole area -->
+          <div class="absolute inset-0 pointer-events-none border-2 border-white/20 rounded-lg"></div>
+        {/if}
+
+        <!-- Drag hint -->
+        <div class="absolute bottom-2 left-1/2 -translate-x-1/2 px-2.5 py-1 bg-black/60 backdrop-blur-sm rounded-md text-[11px] text-white/70 pointer-events-none">
+          Drag to reposition &middot; Scroll to zoom
+        </div>
+      </div>
+
+      <!-- Zoom slider -->
+      <div class="flex items-center gap-3 px-5 mt-3">
+        <svg class="w-4 h-4 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+        <input
+          type="range"
+          min="1"
+          max="5"
+          step="0.01"
+          bind:value={cropZoom}
+          class="flex-1 h-1.5 bg-bg-tertiary rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-md"
+        />
+        <svg class="w-4 h-4 text-text-muted flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="8" y1="11" x2="14" y2="11"></line><line x1="11" y1="8" x2="11" y2="14"></line></svg>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-2 px-5 py-4">
+        <button
+          class="px-4 py-2 bg-bg-tertiary hover:bg-bg-hover text-text-primary rounded-lg text-sm border border-border transition-colors cursor-pointer"
+          onclick={() => cropModal = null}
+        >Cancel</button>
+        <button
+          class="px-5 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 cursor-pointer"
+          onclick={applyCrop}
+          disabled={cropUploading}
+        >
+          {cropUploading ? 'Uploading...' : 'Apply'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- External Link Warning -->
 {#if externalLinkWarning}
