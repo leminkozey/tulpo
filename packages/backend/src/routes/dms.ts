@@ -161,13 +161,14 @@ dms.post("/open", async (c) => {
 
   const db = getDb();
 
-  // Check if DM channel already exists between these two users
+  // Check if 1:1 DM channel already exists between these two users (exclude groups)
   const existing = db
     .query(
       `SELECT dp1.dm_channel_id as id
        FROM dm_participants dp1
        JOIN dm_participants dp2 ON dp1.dm_channel_id = dp2.dm_channel_id
-       WHERE dp1.user_id = ? AND dp2.user_id = ?`
+       JOIN dm_channels dc ON dc.id = dp1.dm_channel_id
+       WHERE dp1.user_id = ? AND dp2.user_id = ? AND (dc.is_group = 0 OR dc.is_group IS NULL)`
     )
     .get(user.id, user_id) as any;
 
