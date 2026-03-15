@@ -88,6 +88,13 @@
   // Report dialog
   let reportDialog = $state<{ type: 'message' | 'file' | 'user'; messageId: string; targetUserId?: string; targetUsername?: string; filename?: string; reason: string; alsoBlock: boolean; submitting: boolean; success: boolean } | null>(null);
 
+  // Profile card state
+  let profileCard = $state<any>(null);
+  let profileCardLoading = $state(false);
+
+  // External link warning
+  let externalLinkWarning = $state<{ url: string; label: string } | null>(null);
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
   // Emoji/GIF/Sticker picker
@@ -309,6 +316,27 @@
 
   function closeMsgContextMenu() {
     msgContextMenu = null;
+  }
+
+  async function openProfileCard(userId: string) {
+    profileCardLoading = true;
+    profileCard = { loading: true };
+    try {
+      const data = await api.get<any>(`/profile/${userId}`);
+      profileCard = data;
+    } catch {
+      profileCard = null;
+    } finally {
+      profileCardLoading = false;
+    }
+  }
+
+  function closeProfileCard() {
+    profileCard = null;
+  }
+
+  function openExternalLink(url: string, label: string) {
+    externalLinkWarning = { url, label };
   }
 
   function openReportDialog(type: 'message' | 'file' | 'user', messageId: string, opts?: { filename?: string; targetUserId?: string; targetUsername?: string }) {
@@ -1525,12 +1553,12 @@
                     </button>
                   {/if}
                   <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-[13px] font-bold text-accent flex-shrink-0">
+                    <button class="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center text-[13px] font-bold text-accent flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer" onclick={() => openProfileCard(msg.author_id)}>
                       {msg.author_username.charAt(0).toUpperCase()}
-                    </div>
+                    </button>
                     <div class="flex-1 min-w-0 pt-0.5">
                       <div class="flex items-baseline gap-2">
-                        <span class="text-[15px] font-semibold text-text-primary leading-none">{msg.author_display_name || msg.author_username}</span>
+                        <button class="text-[15px] font-semibold text-text-primary leading-none hover:underline cursor-pointer" onclick={() => openProfileCard(msg.author_id)}>{msg.author_display_name || msg.author_username}</button>
                         <span class="text-[11px] text-text-muted/60 leading-none">{formatTime(msg.created_at)}</span>
                       </div>
                       {#if editingMessageId === msg.id}
@@ -2177,6 +2205,18 @@
     {#if contextMenu.type === 'friend' && contextMenu.friend}
       {@const friendData = contextMenu.friend}
       <button
+        class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+        onmousedown={() => {
+          const uid = friendData.user.id;
+          closeContextMenu();
+          openProfileCard(uid);
+        }}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Profile
+      </button>
+      <div class="h-px bg-border mx-2 my-1"></div>
+      <button
         class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer"
         onmousedown={async () => {
           const uid = friendData.user.id;
@@ -2353,6 +2393,14 @@
     class="fixed bg-bg-secondary border border-border rounded-lg shadow-lg py-1.5 min-w-[170px] z-50"
     style="left: {msgContextMenu.x}px; top: {msgContextMenu.y}px;"
   >
+    <button
+      class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
+      onmousedown={() => { const uid = msgContextMenu!.msg.author_id; closeMsgContextMenu(); openProfileCard(uid); }}
+    >
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      Profile
+    </button>
+    <div class="h-px bg-border mx-2 my-1"></div>
     <button
       class="w-full text-left px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors cursor-pointer flex items-center gap-2"
       onmousedown={() => { const m = msgContextMenu!.msg; closeMsgContextMenu(); startReply(m); }}
@@ -2728,5 +2776,116 @@
 {#if lightboxUrl}
   <div class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center cursor-zoom-out" onclick={() => lightboxUrl = null} onkeydown={(e) => { if (e.key === 'Escape') lightboxUrl = null; }} role="button" tabindex="-1">
     <img src={lightboxUrl} alt="Full size" class="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+  </div>
+{/if}
+
+<!-- Profile Card Modal -->
+{#if profileCard && !profileCard.loading}
+  <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center" onclick={closeProfileCard}>
+    <div class="relative w-[340px] bg-bg-secondary rounded-2xl overflow-hidden border border-border shadow-2xl" onclick={(e) => e.stopPropagation()}>
+      <!-- Banner -->
+      <div class="h-[100px] relative">
+        {#if profileCard.banner_url}
+          <img src={profileCard.banner_url} alt="Banner" class="w-full h-full object-cover" />
+        {:else}
+          <div class="w-full h-full bg-gradient-to-br from-bg-tertiary to-bg-hover"></div>
+        {/if}
+      </div>
+
+      <!-- Avatar -->
+      <div class="relative px-4">
+        <div class="absolute -top-10">
+          {#if profileCard.avatar_type !== 'color' && profileCard.avatar_url}
+            <img src={profileCard.avatar_url} alt="Avatar" class="w-[80px] h-[80px] rounded-full object-cover border-[5px] border-bg-secondary" />
+          {:else}
+            <div class="w-[80px] h-[80px] rounded-full flex items-center justify-center text-2xl font-bold text-white border-[5px] border-bg-secondary" style="background-color: {profileCard.avatar_color || '#14b8a6'}">
+              {(profileCard.display_name || profileCard.username || '?').charAt(0).toUpperCase()}
+            </div>
+          {/if}
+          <!-- Status indicator -->
+          <div class="absolute bottom-1 right-1 w-5 h-5 rounded-full border-[3px] border-bg-secondary {profileCard.status === 'online' ? 'bg-success' : profileCard.status === 'idle' ? 'bg-warning' : profileCard.status === 'dnd' ? 'bg-danger' : 'bg-text-muted'}"></div>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="pt-12 px-4 pb-4">
+        <h3 class="text-lg font-bold text-text-primary leading-tight">{profileCard.display_name || profileCard.username}</h3>
+        <p class="text-sm text-text-secondary">{profileCard.username}{#if profileCard.pronouns}<span class="text-text-muted"> &middot; {profileCard.pronouns}</span>{/if}</p>
+
+        {#if profileCard.bio}
+          <div class="mt-3 pt-3 border-t border-border">
+            <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide mb-1">About Me</p>
+            <p class="text-[13px] text-text-secondary leading-relaxed whitespace-pre-wrap break-words">{profileCard.bio}</p>
+          </div>
+        {/if}
+
+        {#if profileCard.links?.length > 0}
+          <div class="mt-3 pt-3 border-t border-border">
+            <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide mb-1.5">Links</p>
+            <div class="space-y-1">
+              {#each profileCard.links as link}
+                <button
+                  class="flex items-center gap-2 text-[13px] text-accent hover:text-accent-hover transition-colors group w-full text-left"
+                  onclick={() => openExternalLink(link.url, link.label)}
+                >
+                  <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                  <span class="truncate group-hover:underline">{link.label || link.url}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if profileCard.created_at}
+          <div class="mt-3 pt-3 border-t border-border">
+            <p class="text-[11px] font-semibold text-text-primary uppercase tracking-wide mb-1">Member Since</p>
+            <p class="text-[13px] text-text-secondary">{new Date(profileCard.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Close button -->
+      <button
+        class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+        onclick={closeProfileCard}
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- External Link Warning -->
+{#if externalLinkWarning}
+  <div class="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center" onclick={() => externalLinkWarning = null}>
+    <div class="bg-bg-secondary border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl" onclick={(e) => e.stopPropagation()}>
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-warning" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </div>
+        <div>
+          <h3 class="text-[15px] font-semibold text-text-primary">Leaving Tulpo</h3>
+          <p class="text-[13px] text-text-secondary mt-0.5">You're about to visit an external website.</p>
+        </div>
+      </div>
+
+      <div class="bg-bg-primary rounded-lg border border-border px-3 py-2 mb-4">
+        <p class="text-[12px] text-text-muted mb-0.5">Destination</p>
+        <p class="text-[13px] text-text-secondary break-all">{externalLinkWarning.url}</p>
+      </div>
+
+      <p class="text-[12px] text-text-muted mb-4">Make sure you trust this link. Tulpo is not responsible for external content.</p>
+
+      <div class="flex gap-2 justify-end">
+        <button
+          class="px-4 py-2 bg-bg-tertiary hover:bg-bg-hover text-text-primary rounded-lg text-sm transition-colors"
+          onclick={() => externalLinkWarning = null}
+        >Cancel</button>
+        <button
+          class="px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors"
+          onclick={() => { window.open(externalLinkWarning!.url, '_blank', 'noopener,noreferrer'); externalLinkWarning = null; }}
+        >Open Link</button>
+      </div>
+    </div>
   </div>
 {/if}
