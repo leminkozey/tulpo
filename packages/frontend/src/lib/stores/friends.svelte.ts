@@ -89,6 +89,14 @@ function createFriendsStore() {
     outgoing = outgoing.filter((r) => r.to.id !== data.user_id);
   }
 
+  function handlePresenceUpdate(data: { user_id: string; status: string }) {
+    friends = friends.map((f) =>
+      f.user.id === data.user_id
+        ? { ...f, user: { ...f.user, status: data.status as any } }
+        : f
+    );
+  }
+
   return {
     get friends() { return friends; },
     get incoming() { return incoming; },
@@ -105,6 +113,7 @@ function createFriendsStore() {
     handleFriendAccepted,
     handleFriendRemoved,
     handleFriendRequestCancelled,
+    handlePresenceUpdate,
   };
 }
 

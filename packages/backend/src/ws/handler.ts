@@ -17,6 +17,7 @@ export function addConnection(userId: string, ws: TulpoWebSocket) {
 
   if (isFirstConnection) {
     getDb().run("UPDATE users SET status = 'online' WHERE id = ?", [userId]);
+    broadcastPresence(userId, "online");
   }
 }
 
@@ -27,7 +28,26 @@ export function removeConnection(userId: string, ws: TulpoWebSocket) {
     if (userConns.size === 0) {
       connections.delete(userId);
       getDb().run("UPDATE users SET status = 'offline' WHERE id = ?", [userId]);
+      broadcastPresence(userId, "offline");
     }
+  }
+}
+
+// Notify all friends about a user's presence change
+function broadcastPresence(userId: string, status: string) {
+  const db = getDb();
+  const friends = db
+    .query(
+      `SELECT CASE WHEN user_id = ? THEN friend_id ELSE user_id END as friend_id
+       FROM friends WHERE (user_id = ? OR friend_id = ?) AND status = 'accepted'`
+    )
+    .all(userId, userId, userId) as any[];
+
+  for (const f of friends) {
+    sendToUser(f.friend_id, "PRESENCE_UPDATE", {
+      user_id: userId,
+      status,
+    });
   }
 }
 

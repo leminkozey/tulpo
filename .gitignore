@@ -29,3 +29,19 @@ data/
 
 # Logs
 *.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Temporary
+tmp/
+*.tmp

@@ -18,6 +18,9 @@ import type { WsData } from "./ws/types";
 getDb();
 runMigrations();
 
+// Reset all users to offline on startup (connection pool is empty)
+getDb().run("UPDATE users SET status = 'offline' WHERE status != 'offline'");
+
 const app = new Hono();
 
 // Middleware
