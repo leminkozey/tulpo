@@ -25,6 +25,7 @@ setInterval(() => {
 function getClientIp(c: Context): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim()
     || c.req.header("x-real-ip")
+    || (c.env as any)?.ip?.address
     || "unknown";
 }
 
