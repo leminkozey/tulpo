@@ -42,7 +42,7 @@ export function validateSession(token: string) {
   const db = getDb();
   const row = db
     .query(
-      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.avatar_type, u.avatar_color, u.status
        FROM sessions s
        JOIN users u ON s.user_id = u.id
        WHERE s.token = ? AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`

@@ -52,7 +52,7 @@ auth.post("/register", async (c) => {
 
   const result = db
     .query(
-      `INSERT INTO users (email, username, password_hash) VALUES (?, ?, ?) RETURNING id, email, username, display_name, avatar_url, status`
+      `INSERT INTO users (email, username, password_hash) VALUES (?, ?, ?) RETURNING id, email, username, display_name, avatar_url, avatar_type, avatar_color, status`
     )
     .get(email, username, passwordHash) as any;
 
@@ -69,6 +69,8 @@ auth.post("/register", async (c) => {
         username: result.username,
         display_name: result.display_name,
         avatar_url: result.avatar_url,
+        avatar_type: result.avatar_type,
+        avatar_color: result.avatar_color,
         status: result.status,
       },
       token: session.token,
@@ -96,7 +98,7 @@ auth.post("/login", bruteForceCheck(), async (c) => {
 
   const user = db
     .query(
-      "SELECT id, email, username, display_name, avatar_url, status, password_hash FROM users WHERE email = ?"
+      "SELECT id, email, username, display_name, avatar_url, avatar_type, avatar_color, status, password_hash FROM users WHERE email = ?"
     )
     .get(email) as any;
 
@@ -129,6 +131,8 @@ auth.post("/login", bruteForceCheck(), async (c) => {
       username: user.username,
       display_name: user.display_name,
       avatar_url: user.avatar_url,
+      avatar_type: user.avatar_type,
+      avatar_color: user.avatar_color,
       status: user.status,
     },
     token: session.token,
