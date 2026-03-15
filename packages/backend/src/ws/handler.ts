@@ -17,8 +17,12 @@ export function addConnection(userId: string, ws: TulpoWebSocket) {
   connections.get(userId)!.add(ws);
 
   if (isFirstConnection) {
-    getDb().run("UPDATE users SET status = 'online' WHERE id = ?", [userId]);
-    broadcastPresence(userId, "online");
+    const db = getDb();
+    // Respect manually set status — only change from 'offline' to 'online'
+    const current = db.query("SELECT status FROM users WHERE id = ?").get(userId) as any;
+    const newStatus = current?.status === "dnd" || current?.status === "idle" ? current.status : "online";
+    db.run("UPDATE users SET status = ? WHERE id = ?", [newStatus, userId]);
+    broadcastPresence(userId, newStatus);
   }
 }
 
@@ -35,7 +39,7 @@ export function removeConnection(userId: string, ws: TulpoWebSocket) {
 }
 
 // Notify all friends about a user's presence change
-function broadcastPresence(userId: string, status: string) {
+export function broadcastPresence(userId: string, status: string) {
   const db = getDb();
   const friends = db
     .query(

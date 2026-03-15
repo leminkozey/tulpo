@@ -85,6 +85,12 @@ function createAuthStore() {
     clearSession();
   }
 
+  function setStatus(status: "online" | "idle" | "dnd" | "offline") {
+    if (user) {
+      user = { ...user, status };
+    }
+  }
+
   return {
     get user() {
       return user;
@@ -102,6 +108,7 @@ function createAuthStore() {
     register,
     login,
     logout,
+    setStatus,
   };
 }
 

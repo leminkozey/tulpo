@@ -95,6 +95,28 @@
   // External link warning
   let externalLinkWarning = $state<{ url: string; label: string } | null>(null);
 
+  // Status picker
+  let showStatusPicker = $state(false);
+  let statusPickerRef: HTMLDivElement | undefined = $state();
+
+  const statusOptions = [
+    { value: 'online' as const, label: 'Online', color: 'bg-success' },
+    { value: 'idle' as const, label: 'Idle', color: 'bg-warning' },
+    { value: 'dnd' as const, label: 'Do Not Disturb', color: 'bg-danger' },
+    { value: 'offline' as const, label: 'Invisible', color: 'bg-text-muted' },
+  ];
+
+  async function setUserStatus(status: 'online' | 'idle' | 'dnd' | 'offline') {
+    showStatusPicker = false;
+    auth.setStatus(status);
+    try {
+      await api.patch('/profile/status', { status });
+    } catch {
+      // Revert on failure
+      auth.setStatus(auth.user?.status || 'online');
+    }
+  }
+
   let contextMenuRef: HTMLDivElement | undefined = $state();
 
   // Emoji/GIF/Sticker picker
@@ -397,6 +419,12 @@
       const target = e.target as HTMLElement;
       if (!target.closest('[data-picker-btn]')) {
         showPicker = false;
+      }
+    }
+    if (showStatusPicker && statusPickerRef && !statusPickerRef.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-status-btn]')) {
+        showStatusPicker = false;
       }
     }
   }
@@ -1451,17 +1479,44 @@
 
     <!-- User area -->
     <div class="h-[52px] flex items-center gap-2 px-2 bg-bg-primary/50 border-t border-border relative">
-      <div class="relative">
+      <!-- Status Picker Popup -->
+      {#if showStatusPicker}
+        <div bind:this={statusPickerRef} class="absolute bottom-[56px] left-2 right-2 bg-bg-secondary border border-border rounded-lg shadow-xl py-1.5 z-50">
+          <p class="px-3 py-1 text-[11px] font-semibold text-text-muted uppercase tracking-wider">Set Status</p>
+          {#each statusOptions as opt}
+            <button
+              onclick={() => setUserStatus(opt.value)}
+              class="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm hover:bg-bg-hover transition-colors"
+              class:text-text-primary={auth.user?.status === opt.value}
+              class:text-text-secondary={auth.user?.status !== opt.value}
+            >
+              <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 {opt.color}"></div>
+              <span>{opt.label}</span>
+              {#if auth.user?.status === opt.value}
+                <svg class="w-3.5 h-3.5 ml-auto text-accent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              {/if}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      <button data-status-btn onclick={() => showStatusPicker = !showStatusPicker} class="relative flex-shrink-0 cursor-pointer">
         {#if auth.user?.avatar_type !== 'color' && auth.user?.avatar_url}
           <img src={auth.user.avatar_url} alt="" class="w-8 h-8 rounded-full object-cover" />
         {:else}
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background-color: {auth.user?.avatar_color || '#14b8a6'}">{auth.user?.username?.charAt(0).toUpperCase() ?? '?'}</div>
         {/if}
-        <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary" class:bg-success={wsClient.status === 'connected'} class:bg-warning={wsClient.status === 'connecting' || wsClient.status === 'reconnecting'} class:bg-danger={wsClient.status === 'disconnected'}></div>
-      </div>
+        <div
+          class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg-secondary"
+          class:bg-success={auth.user?.status === 'online'}
+          class:bg-warning={auth.user?.status === 'idle'}
+          class:bg-danger={auth.user?.status === 'dnd'}
+          class:bg-text-muted={!auth.user?.status || auth.user?.status === 'offline'}
+        ></div>
+      </button>
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-text-primary truncate">{auth.user?.username ?? ''}</p>
-        <p class="text-[11px] text-text-muted truncate capitalize">{wsClient.status === 'connected' ? 'Online' : wsClient.status}</p>
+        <p class="text-[11px] text-text-muted truncate">{auth.user?.status === 'dnd' ? 'Do Not Disturb' : auth.user?.status === 'idle' ? 'Idle' : auth.user?.status === 'offline' ? 'Invisible' : 'Online'}</p>
       </div>
       <button aria-label="User settings" onclick={() => goto('/settings')} class="w-8 h-8 rounded-md flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-bg-hover transition-all duration-150">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -1485,7 +1540,7 @@
             {:else}
               <div class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background-color: {activeDmUser.avatar_color || '#14b8a6'}">{activeDmUser.username.charAt(0).toUpperCase()}</div>
             {/if}
-            <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-primary" class:bg-success={activeDmUser.status === 'online'} class:bg-text-muted={activeDmUser.status !== 'online'}></div>
+            <div class="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-bg-primary" class:bg-success={activeDmUser.status === 'online'} class:bg-warning={activeDmUser.status === 'idle'} class:bg-danger={activeDmUser.status === 'dnd'} class:bg-text-muted={activeDmUser.status === 'offline' || !activeDmUser.status}></div>
           {/if}
         </div>
         <span class="text-[15px] font-semibold text-text-primary flex-1">{activeDmUser.display_name || activeDmUser.username}</span>

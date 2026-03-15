@@ -4,6 +4,7 @@ import type { PublicUser } from "@tulpo/shared";
 import { updateProfileSchema, IMAGE_MIME_TYPES, MAX_IMAGE_SIZE } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { signUrl } from "../lib/signed-url";
+import { broadcastPresence } from "../ws/handler";
 import {
   verifyMagicBytes,
   checkFileSafety,
@@ -132,6 +133,27 @@ profile.patch("/", async (c) => {
 
   const result = getUserProfile(user.id);
   return c.json(result);
+});
+
+// PATCH /api/profile/status — set user status
+profile.patch("/status", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json<{ status: string }>();
+  const validStatuses = ["online", "idle", "dnd", "offline"];
+
+  if (!body.status || !validStatuses.includes(body.status)) {
+    return c.json({ error: "Invalid status. Must be: online, idle, dnd, offline" }, 400);
+  }
+
+  const db = getDb();
+  db.run(
+    "UPDATE users SET status = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?",
+    [body.status, user.id]
+  );
+
+  broadcastPresence(user.id, body.status);
+
+  return c.json({ status: body.status });
 });
 
 // POST /api/profile/avatar — upload avatar image/gif
