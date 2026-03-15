@@ -1307,8 +1307,9 @@
             {uploadError}
           </div>
         {/if}
+        <div class="relative z-10 rounded-xl bg-bg-tertiary border border-border focus-within:border-accent/50 focus-within:shadow-[0_0_0_1px_rgba(20,184,166,0.15)] transition-all duration-150 {replyingTo ? 'border-l-[3px] border-l-accent' : ''}">
         {#if replyingTo}
-          <div class="relative z-10 flex items-center gap-2.5 bg-bg-tertiary border-l-[3px] border-l-accent border-t border-r border-t-border border-r-border rounded-t-lg px-3.5 py-2.5">
+          <div class="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border/50">
             <svg class="w-4 h-4 text-accent flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
             <span class="text-[12px] text-text-muted">Replying to</span>
             <span class="text-[12px] font-semibold text-accent">{replyingTo.author_display_name || replyingTo.author_username}</span>
@@ -1320,7 +1321,7 @@
         {/if}
         <!-- File preview bar -->
         {#if pendingFiles.length > 0}
-          <div class="relative z-10 flex items-center gap-2 bg-bg-tertiary border border-border {replyingTo ? 'border-t-0' : 'rounded-t-xl'} px-3 py-2.5 overflow-x-auto">
+          <div class="flex items-center gap-2 px-3 py-2.5 overflow-x-auto {replyingTo || pendingFiles.length > 0 ? 'border-b border-border/50' : ''}">
             {#each pendingFiles as pf, i (pf.file.name + i)}
               <div class="relative flex-shrink-0 group/preview">
                 {#if pf.isImage}
@@ -1338,7 +1339,7 @@
             {/each}
           </div>
         {/if}
-        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }} class="relative z-10">
+        <form onsubmit={(e) => { e.preventDefault(); if (mentionActive && mentionSuggestions().length > 0) return; sendMessage(); }}>
           <!-- Mention autocomplete popup -->
           {#if mentionActive && mentionSuggestions().length > 0}
             <div class="absolute bottom-full mb-1 left-0 w-72 bg-bg-secondary border border-border rounded-lg shadow-xl overflow-hidden z-20">
@@ -1371,7 +1372,7 @@
               {/each}
             </div>
           {/if}
-          <div class="flex items-center gap-0 {replyingTo || pendingFiles.length > 0 ? 'rounded-b-xl border-t-0' : 'rounded-xl'} bg-bg-tertiary border border-border focus-within:border-accent/50 focus-within:shadow-[0_0_0_1px_rgba(20,184,166,0.15)] transition-all duration-150 {replyingTo && pendingFiles.length === 0 ? 'border-l-[3px] border-l-accent' : ''}">
+          <div class="flex items-center gap-0">
             <button type="button" class="flex-shrink-0 px-3 py-3 text-text-muted hover:text-accent transition-colors" onclick={() => fileInputEl?.click()}>
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
             </button>
@@ -1400,6 +1401,7 @@
           </div>
           <input type="file" multiple class="hidden" bind:this={fileInputEl} onchange={(e) => { const t = e.target as HTMLInputElement; if (t.files) { addFiles(t.files); t.value = ''; } }} />
         </form>
+        </div>
       </div>
     {:else}
       <!-- Friends View -->
