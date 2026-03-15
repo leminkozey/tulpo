@@ -1581,7 +1581,7 @@
                         </div>
                       {/if}
                       {#if msg.reactions?.length > 0}
-                        <div class="flex flex-wrap gap-1 mt-1.5">
+                        <div class="flex flex-wrap items-center gap-1 mt-1.5">
                           {#each msg.reactions as reaction (reaction.emoji)}
                             <button
                               class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
@@ -1592,6 +1592,15 @@
                               <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
                             </button>
                           {/each}
+                          <button
+                            class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
+                            onclick={(e) => openReactionPicker(e, msg)}
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                          </button>
+                        </div>
+                      {:else}
+                        <div class="mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
                           <button
                             class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
                             onclick={(e) => openReactionPicker(e, msg)}
@@ -1689,7 +1698,7 @@
                         </div>
                       {/if}
                       {#if msg.reactions?.length > 0}
-                        <div class="flex flex-wrap gap-1 mt-1.5">
+                        <div class="flex flex-wrap items-center gap-1 mt-1.5">
                           {#each msg.reactions as reaction (reaction.emoji)}
                             <button
                               class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
@@ -1700,6 +1709,15 @@
                               <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
                             </button>
                           {/each}
+                          <button
+                            class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
+                            onclick={(e) => openReactionPicker(e, msg)}
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                          </button>
+                        </div>
+                      {:else}
+                        <div class="mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
                           <button
                             class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
                             onclick={(e) => openReactionPicker(e, msg)}
