@@ -207,13 +207,21 @@
 
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputW, outputH);
 
-      // Convert to blob
+      // Convert to blob — try webp, fall back to png
       const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/webp', 0.9);
+        canvas.toBlob((b) => {
+          if (b && b.type === 'image/webp') {
+            resolve(b);
+          } else {
+            // Browser didn't support webp, use png
+            canvas.toBlob((pb) => resolve(pb!), 'image/png');
+          }
+        }, 'image/webp', 0.9);
       });
 
+      const ext = blob.type === 'image/webp' ? 'webp' : 'png';
       const formData = new FormData();
-      formData.append('file', blob, `cropped.webp`);
+      formData.append('file', new File([blob], `cropped.${ext}`, { type: blob.type }));
 
       if (isAvatar) {
         const res = await api.upload<{ avatar_url: string; avatar_type: string }>('/profile/avatar', formData);
