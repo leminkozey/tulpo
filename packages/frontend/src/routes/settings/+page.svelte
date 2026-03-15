@@ -687,8 +687,8 @@
       </div>
 
       <!-- Crop area -->
-      <div class="relative mx-5 mt-4 overflow-hidden rounded-lg bg-black/90 select-none"
-        style="height: {cropModal.type === 'avatar' ? '340px' : '200px'}"
+      <div class="relative mx-5 mt-4 overflow-hidden rounded-lg bg-black/90 select-none {cropModal.type === 'avatar' ? 'aspect-square max-h-[420px]' : ''}"
+        style="{cropModal.type === 'banner' ? 'height: 200px' : ''}"
         bind:this={cropContainerEl}
         onpointerdown={onCropPointerDown}
         onpointermove={onCropPointerMove}
@@ -717,14 +717,16 @@
 
         <!-- Overlay mask -->
         {#if cropModal.type === 'avatar'}
-          <!-- Circle mask using radial gradient -->
-          <div class="absolute inset-0 pointer-events-none" style="
-            background: radial-gradient(circle at center, transparent 35%, rgba(0,0,0,0.6) 36%);
-          "></div>
+          <!-- Circle mask: 4 semi-transparent rects around a centered circle -->
+          <div class="absolute inset-0 pointer-events-none overflow-hidden">
+            <div class="absolute inset-0" style="
+              background: radial-gradient(circle closest-side at center, transparent 99%, rgba(0,0,0,0.6) 100%);
+            "></div>
+          </div>
           <!-- Circle border -->
           <div class="absolute pointer-events-none border-2 border-white/40 rounded-full"
             style="
-              width: min(70%, 280px); height: min(70%, 280px);
+              width: 85%; height: 85%;
               left: 50%; top: 50%;
               transform: translate(-50%, -50%);
             "
