@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getDb } from "@tulpo/db";
 import type { PublicUser } from "@tulpo/shared";
-import { ALLOWED_MIME_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE } from "@tulpo/shared";
+import { BLOCKED_MIME_TYPES, IMAGE_MIME_TYPES, MAX_IMAGE_SIZE, MAX_FILE_SIZE } from "@tulpo/shared";
 import { authMiddleware } from "../middleware/auth";
 import { sendToUser } from "../ws/handler";
 import { signUrl } from "../lib/signed-url";
@@ -67,11 +67,12 @@ dms.get("/", async (c) => {
   const channels = db
     .query(
       `SELECT dc.id, dc.name, dc.description, dc.is_group, dc.owner_id, dc.created_at,
-              dp.status as my_status, dp.left_at
+              dp.status as my_status, dp.left_at,
+              (SELECT MAX(m.created_at) FROM dm_messages m WHERE m.dm_channel_id = dc.id) as last_message_at
        FROM dm_channels dc
        JOIN dm_participants dp ON dc.id = dp.dm_channel_id
        WHERE dp.user_id = ? AND dp.status != 'deleted'
-       ORDER BY dc.created_at DESC`
+       ORDER BY COALESCE(last_message_at, dc.created_at) DESC`
     )
     .all(user.id) as any[];
 
@@ -94,6 +95,7 @@ dms.get("/", async (c) => {
       owner_id: ch.owner_id,
       my_status: ch.my_status,
       left_at: ch.left_at,
+      last_message_at: ch.last_message_at,
       participants,
     };
   });
@@ -322,10 +324,11 @@ dms.post("/:id/messages", async (c) => {
       return c.json({ error: `Upload limit reached, try again in ${retryMin} min` }, 429);
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    if ((BLOCKED_MIME_TYPES as readonly string[]).includes(file.type)) {
       return c.json({ error: "File type not allowed" }, 400);
     }
-    const maxSize = file.type.startsWith("image/") ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+    const isImage = (IMAGE_MIME_TYPES as readonly string[]).includes(file.type);
+    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     if (file.size > maxSize) {
       const maxMB = Math.round(maxSize / 1024 / 1024);
       return c.json({ error: `File too large (max ${maxMB} MB)` }, 400);
@@ -334,9 +337,10 @@ dms.post("/:id/messages", async (c) => {
     // Read file into buffer for all checks
     fileBuffer = Buffer.from(await file.arrayBuffer());
 
-    // Verify actual file content via magic bytes
+    // Verify actual file content via magic bytes (only for types we have signatures for)
     const header = new Uint8Array(fileBuffer.slice(0, 12));
-    if (!verifyMagicBytes(header, file.type)) {
+    const magicResult = verifyMagicBytes(header, file.type);
+    if (magicResult === false) {
       return c.json({ error: "File content doesn't match declared type" }, 400);
     }
 
@@ -354,7 +358,7 @@ dms.post("/:id/messages", async (c) => {
     }
 
     // Re-encode images (strip metadata, limit dimensions)
-    if (file.type.startsWith("image/")) {
+    if (isImage) {
       try {
         fileBuffer = await processImage(fileBuffer, file.type);
       } catch (err) {

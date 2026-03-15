@@ -10,10 +10,11 @@ const MAX_CONCURRENT_PROCESSING = 4;
 
 // ===== Magic Bytes Verification =====
 
+// Returns true if verified, false if mismatch, null if unknown type (skip check)
 export function verifyMagicBytes(
   header: Uint8Array,
   mimeType: string
-): boolean {
+): boolean | null {
   const hex = Array.from(header.slice(0, 8))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -61,7 +62,7 @@ export function verifyMagicBytes(
         !hex.startsWith("7f454c46")
       );
     default:
-      return false;
+      return null; // Unknown type — skip magic bytes check
   }
 }
 

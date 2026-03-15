@@ -210,6 +210,12 @@
   async function loadDmChannels() {
     try {
       dmChannels = await api.get<any[]>('/dms');
+      // Seed dmActivity for groups from last_message_at
+      for (const ch of dmChannels) {
+        if (ch.is_group && ch.last_message_at) {
+          dmActivity = { ...dmActivity, [ch.id]: new Date(ch.last_message_at).getTime() };
+        }
+      }
     } catch { /* ignore */ }
   }
 
@@ -282,6 +288,7 @@
     activeDmUser = { id: channelId, username: ch.name, display_name: ch.name, is_group: true, owner_id: ch.owner_id, status: 'online' };
     activeDmChannelId = channelId;
     currentView = 'dm';
+    messages = [];
     messagesLoading = true;
     showGroupSettings = false;
     replyingTo = null;
@@ -345,6 +352,20 @@
         loadDmChannels();
         if (activeDmChannelId === data.channel_id) goToFriends();
       }));
+      unsubs.push(wsClient.on('PRESENCE_UPDATE', (data: any) => {
+        friendsStore.handlePresenceUpdate(data);
+        // Update DM sidebar status
+        dmChannels = dmChannels.map(ch => ({
+          ...ch,
+          participants: ch.participants.map((p: any) =>
+            p.id === data.user_id ? { ...p, status: data.status } : p
+          ),
+        }));
+        // Update active DM user status
+        if (activeDmUser && !activeDmUser.is_group && activeDmUser.id === data.user_id) {
+          activeDmUser = { ...activeDmUser, status: data.status };
+        }
+      }));
       unsubs.push(wsClient.on('DM_MESSAGE', (data: any) => {
         const authorId = data.message?.author_id;
         const channelId = data.channel_id;
@@ -356,6 +377,13 @@
             clearTimeout(entry.timeout);
             typingUsers.delete(authorId);
             typingUsers = new Map(typingUsers);
+          }
+        }
+        // Also update group activity by channel ID
+        if (channelId) {
+          const isGroupMsg = dmChannels.some(c => c.id === channelId && c.is_group);
+          if (isGroupMsg) {
+            dmActivity = { ...dmActivity, [channelId]: Date.now() };
           }
         }
         if (channelId === activeDmChannelId) {
@@ -440,7 +468,9 @@
 
   async function openDm(friend: any) {
     activeDmUser = friend.user;
+    activeDmChannelId = null;
     currentView = 'dm';
+    messages = [];
     messagesLoading = true;
     replyingTo = null;
     editingMessageId = null;
@@ -474,13 +504,23 @@
   function addFiles(fileList: FileList | File[]) {
     const maxImageSize = 10 * 1024 * 1024;
     const maxFileSize = 25 * 1024 * 1024;
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain', 'application/zip', 'application/x-zip-compressed', 'video/mp4', 'audio/mpeg', 'audio/ogg'];
+    const blocked = ['text/html', 'application/xhtml+xml', 'image/svg+xml', 'application/javascript', 'text/javascript'];
+    const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
     for (const file of fileList) {
-      if (!allowed.includes(file.type)) continue;
-      const max = file.type.startsWith('image/') ? maxImageSize : maxFileSize;
-      if (file.size > max) continue;
-      const isImage = file.type.startsWith('image/');
+      if (blocked.includes(file.type)) {
+        addError = `${file.name}: file type not allowed`;
+        setTimeout(() => addError = '', 3000);
+        continue;
+      }
+      const isImage = imageTypes.includes(file.type);
+      const max = isImage ? maxImageSize : maxFileSize;
+      if (file.size > max) {
+        const maxMB = Math.round(max / 1024 / 1024);
+        addError = `${file.name}: too large (max ${maxMB} MB)`;
+        setTimeout(() => addError = '', 3000);
+        continue;
+      }
       const previewUrl = isImage ? URL.createObjectURL(file) : '';
       pendingFiles = [...pendingFiles, { file, previewUrl, isImage }];
     }
@@ -632,6 +672,24 @@
       })
       .toSorted((a, b) => (dmActivity[b.user.id] ?? 0) - (dmActivity[a.user.id] ?? 0))
   );
+
+  // Combined sidebar: groups + friends sorted together by last activity
+  type SidebarItem = { type: 'friend'; friend: any; sortKey: number } | { type: 'group'; channel: any; sortKey: number };
+  let sidebarItems = $derived.by<SidebarItem[]>(() => {
+    const q = dmSearch.trim().toLowerCase();
+    const items: SidebarItem[] = [];
+    // Add groups
+    for (const ch of dmChannels) {
+      if (!ch.is_group || ch.my_status === 'hidden') continue;
+      if (q && !ch.name?.toLowerCase().includes(q)) continue;
+      items.push({ type: 'group', channel: ch, sortKey: dmActivity[ch.id] ?? (ch.last_message_at ? new Date(ch.last_message_at).getTime() : 0) });
+    }
+    // Add friends
+    for (const f of sidebarFriends) {
+      items.push({ type: 'friend', friend: f, sortKey: dmActivity[f.user.id] ?? 0 });
+    }
+    return items.toSorted((a, b) => b.sortKey - a.sortKey);
+  });
 
   const mentionColors = [
     { text: '#2dd4bf', bg: 'rgba(45,212,191,0.1)' },  // teal
@@ -904,28 +962,26 @@
         </button>
       </div>
 
-      <!-- Group DMs -->
-      {#each dmChannels.filter(c => c.is_group && c.my_status !== 'hidden') as channel (channel.id)}
-        <button
-          class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmChannelId === channel.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
-          onclick={() => openGroupDm(channel.id)}
-          oncontextmenu={(e) => handleContextMenu(e, 'group', { channelId: channel.id, channelName: channel.name, myStatus: channel.my_status })}
-        >
-          <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </div>
-          <span class="text-sm text-text-secondary group-hover:text-text-primary truncate flex-1">{channel.name}</span>
-          {#if unreadCounts[channel.id]}
-            <span class="bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unreadCounts[channel.id]}</span>
-          {:else if channel.my_status === 'left'}
-            <span class="text-[10px] text-text-muted flex-shrink-0">Left</span>
-          {/if}
-        </button>
-      {/each}
-
-      <!-- Friend DMs -->
-      {#if sidebarFriends.length > 0}
-        {#each sidebarFriends as friend (friend.id)}
+      {#each sidebarItems as item (item.type === 'group' ? `g-${item.channel.id}` : `f-${item.friend.id}`)}
+        {#if item.type === 'group'}
+          {@const channel = item.channel}
+          <button
+            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmChannelId === channel.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
+            onclick={() => openGroupDm(channel.id)}
+            oncontextmenu={(e) => handleContextMenu(e, 'group', { channelId: channel.id, channelName: channel.name, myStatus: channel.my_status })}
+          >
+            <div class="w-8 h-8 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent flex-shrink-0">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <span class="text-sm text-text-secondary group-hover:text-text-primary truncate flex-1">{channel.name}</span>
+            {#if unreadCounts[channel.id]}
+              <span class="bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unreadCounts[channel.id]}</span>
+            {:else if channel.my_status === 'left'}
+              <span class="text-[10px] text-text-muted flex-shrink-0">Left</span>
+            {/if}
+          </button>
+        {:else}
+          {@const friend = item.friend}
           <button
             class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmUser?.id === friend.user.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
             onclick={() => openDm(friend)}
@@ -948,12 +1004,14 @@
               <span class="bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unreadCounts[friend.user.id]}</span>
             {/if}
           </button>
-        {/each}
-      {:else if dmSearch.trim()}
-        <p class="text-xs text-text-muted px-2">No results</p>
-      {:else if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group).length === 0}
-        <p class="text-xs text-text-muted px-2">Add friends to start chatting</p>
-      {/if}
+        {/if}
+      {:else}
+        {#if dmSearch.trim()}
+          <p class="text-xs text-text-muted px-2">No results</p>
+        {:else if friendsStore.friends.length === 0 && dmChannels.filter(c => c.is_group).length === 0}
+          <p class="text-xs text-text-muted px-2">Add friends to start chatting</p>
+        {/if}
+      {/each}
     </div>
 
     <!-- User area -->

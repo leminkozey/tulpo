@@ -9,16 +9,20 @@ export const FRIEND_REQUEST_NOTE_MAX_LENGTH = 200;
 // File uploads
 export const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10 MB
 export const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-export const ALLOWED_MIME_TYPES = [
+
+// Image types that get re-encoded via Sharp (displayed inline)
+export const IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/gif",
   "image/webp",
-  "application/pdf",
-  "text/plain",
-  "application/zip",
-  "application/x-zip-compressed",
-  "video/mp4",
-  "audio/mpeg",
-  "audio/ogg",
-];
+] as const;
+
+// Blocked types that should never be uploaded (served inline = XSS risk)
+export const BLOCKED_MIME_TYPES = [
+  "text/html",
+  "application/xhtml+xml",
+  "image/svg+xml",
+  "application/javascript",
+  "text/javascript",
+] as const;
