@@ -38,6 +38,7 @@
   let activeDmUser = $state<any>(null);
   let messages = $state<any[]>([]);
   let messageInput = $state('');
+  let drafts = $state<Record<string, string>>({});
   let messagesLoading = $state(false);
   let sendingMessage = $state(false);
   let rateLimitedUntil = $state(0);
@@ -286,8 +287,10 @@
   async function openGroupDm(channelId: string) {
     const ch = dmChannels.find(c => c.id === channelId);
     if (!ch) return;
+    saveDraft();
     activeDmUser = { id: channelId, username: ch.name, display_name: ch.name, is_group: true, owner_id: ch.owner_id, status: 'online' };
     activeDmChannelId = channelId;
+    loadDraft(channelId);
     currentView = 'dm';
     messages = [];
     messagesLoading = true;
@@ -467,7 +470,21 @@
     }
   }
 
+  function saveDraft() {
+    if (activeDmChannelId && messageInput.trim()) {
+      drafts = { ...drafts, [activeDmChannelId]: messageInput };
+    } else if (activeDmChannelId) {
+      const { [activeDmChannelId]: _, ...rest } = drafts;
+      drafts = rest;
+    }
+  }
+
+  function loadDraft(channelId: string) {
+    messageInput = drafts[channelId] ?? '';
+  }
+
   async function openDm(friend: any) {
+    saveDraft();
     activeDmUser = friend.user;
     activeDmChannelId = null;
     currentView = 'dm';
@@ -487,6 +504,7 @@
     try {
       const { channel_id } = await api.post<{ channel_id: string }>('/dms/open', { user_id: friend.user.id });
       activeDmChannelId = channel_id;
+      loadDraft(channel_id);
       messages = await api.get<any[]>(`/dms/${channel_id}/messages`);
       // Track activity from last message or now
       const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
@@ -557,6 +575,10 @@
     const replyId = replyingTo?.id || null;
     const filesToSend = [...pendingFiles];
     messageInput = '';
+    if (activeDmChannelId) {
+      const { [activeDmChannelId]: _, ...rest } = drafts;
+      drafts = rest;
+    }
     replyingTo = null;
     editingMessageId = null;
     for (const t of typingUsers.values()) clearTimeout(t.timeout);
@@ -615,6 +637,7 @@
   }
 
   function goToFriends() {
+    saveDraft();
     currentView = 'friends';
     activeDmChannelId = null;
     activeDmUser = null;
