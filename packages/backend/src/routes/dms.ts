@@ -497,19 +497,11 @@ dms.post("/:id/messages", async (c) => {
     }
   }
 
-  // Insert message
-  const msg = db
-    .query(
-      `INSERT INTO dm_messages (dm_channel_id, author_id, content, reply_to_id)
-       VALUES (?, ?, ?, ?)
-       RETURNING id, created_at`
-    )
-    .get(channelId, user.id, content?.trim() || "", reply_to_id || null) as any;
-
-  // Handle file upload
+  // Handle file upload — check quota BEFORE inserting message to avoid orphaned rows
   let attachments: any[] = [];
+  let finalSize = 0;
   if (file && fileBuffer) {
-    const finalSize = fileBuffer.length;
+    finalSize = fileBuffer.length;
 
     // Atomic storage quota check+update (prevents race condition)
     const quotaResult = db
@@ -531,7 +523,19 @@ dms.post("/:id/messages", async (c) => {
         413
       );
     }
+  }
 
+  // Insert message (after quota check so we don't leave orphaned rows)
+  const msg = db
+    .query(
+      `INSERT INTO dm_messages (dm_channel_id, author_id, content, reply_to_id)
+       VALUES (?, ?, ?, ?)
+       RETURNING id, created_at`
+    )
+    .get(channelId, user.id, content?.trim() || "", reply_to_id || null) as any;
+
+  // Save file to disk and create attachment record
+  if (file && fileBuffer) {
     // Sanitize: only allow alphanumeric channel IDs (prevent path traversal)
     if (!/^[a-f0-9]+$/.test(channelId)) {
       return c.json({ error: "Invalid channel" }, 400);
