@@ -1584,12 +1584,12 @@
                         <div class="flex flex-wrap items-center gap-1 mt-1.5">
                           {#each msg.reactions as reaction (reaction.emoji)}
                             <button
-                              class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
+                              class="flex items-center justify-center gap-1 h-7 px-1.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
                               onclick={() => toggleReaction(msg.id, reaction.emoji)}
                               title={reaction.users.map((u: any) => u.username).join(', ')}
                             >
-                              <span class="text-[15px] leading-none">{reaction.emoji}</span>
-                              <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
+                              <span class="text-[15px]">{reaction.emoji}</span>
+                              <span class="text-[12px] font-medium tabular-nums">{reaction.count}</span>
                             </button>
                           {/each}
                           <button
@@ -1697,12 +1697,12 @@
                         <div class="flex flex-wrap items-center gap-1 mt-1.5">
                           {#each msg.reactions as reaction (reaction.emoji)}
                             <button
-                              class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
+                              class="flex items-center justify-center gap-1 h-7 px-1.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
                               onclick={() => toggleReaction(msg.id, reaction.emoji)}
                               title={reaction.users.map((u: any) => u.username).join(', ')}
                             >
-                              <span class="text-[15px] leading-none">{reaction.emoji}</span>
-                              <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
+                              <span class="text-[15px]">{reaction.emoji}</span>
+                              <span class="text-[12px] font-medium tabular-nums">{reaction.count}</span>
                             </button>
                           {/each}
                           <button
