@@ -1613,11 +1613,7 @@
                   </div>
                   <!-- Action toolbar -->
                   <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={(e) => openReactionPicker(e, msg)}>
-                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-                    </button>
-                    <div class="w-px h-4 bg-border"></div>
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startReply(msg)}>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
                     {#if canEdit(msg)}
@@ -1730,11 +1726,7 @@
                   </div>
                   <!-- Action toolbar -->
                   <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={(e) => openReactionPicker(e, msg)}>
-                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
-                    </button>
-                    <div class="w-px h-4 bg-border"></div>
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startReply(msg)}>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
                     {#if canEdit(msg)}
