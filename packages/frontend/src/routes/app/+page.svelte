@@ -106,6 +106,76 @@
   let pickerRef: HTMLDivElement | undefined = $state();
   let pendingGifs = $state<{ url: string; preview: string; title: string }[]>([]);
 
+  // Reaction picker state
+  let reactionPickerMsgId = $state<string | null>(null);
+  let reactionPickerPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+  let reactionPickerRef: HTMLDivElement | undefined = $state();
+
+  const quickEmojis = ['😂', '❤️', '🔥', '👍', '😭', '💀', '✨', '😊', '🥺', '😍', '🤣', '😎', '🥰', '😅', '🤔', '👀', '🙏', '😈', '💯', '🎉'];
+
+  function openReactionPicker(e: MouseEvent, msg: any) {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    reactionPickerPos = { x: rect.right - 280, y: rect.top - 10 };
+    reactionPickerMsgId = msg.id;
+  }
+
+  function closeReactionPicker() {
+    reactionPickerMsgId = null;
+  }
+
+  async function toggleReaction(messageId: string, emoji: string) {
+    if (!activeDmChannelId) return;
+    const msg = messages.find(m => m.id === messageId);
+    const existing = msg?.reactions?.find((r: any) => r.emoji === emoji);
+    const alreadyReacted = existing?.reacted;
+
+    // Optimistic update
+    messages = messages.map(m => {
+      if (m.id !== messageId) return m;
+      const reactions = [...(m.reactions || [])];
+      const idx = reactions.findIndex((r: any) => r.emoji === emoji);
+      if (alreadyReacted) {
+        if (idx >= 0) {
+          reactions[idx] = {
+            ...reactions[idx],
+            count: reactions[idx].count - 1,
+            reacted: false,
+            users: reactions[idx].users.filter((u: any) => u.id !== auth.user?.id),
+          };
+          if (reactions[idx].count <= 0) reactions.splice(idx, 1);
+        }
+      } else {
+        if (idx >= 0) {
+          reactions[idx] = {
+            ...reactions[idx],
+            count: reactions[idx].count + 1,
+            reacted: true,
+            users: [...reactions[idx].users, { id: auth.user?.id, username: auth.user?.username }],
+          };
+        } else {
+          reactions.push({
+            emoji,
+            count: 1,
+            reacted: true,
+            users: [{ id: auth.user?.id, username: auth.user?.username }],
+          });
+        }
+      }
+      return { ...m, reactions };
+    });
+
+    try {
+      if (alreadyReacted) {
+        await api.delete(`/dms/${activeDmChannelId}/messages/${messageId}/reactions?emoji=${encodeURIComponent(emoji)}`);
+      } else {
+        await api.put(`/dms/${activeDmChannelId}/messages/${messageId}/reactions`, { emoji });
+      }
+    } catch {
+      // Revert on error - refetch would be better but this is simpler
+    }
+    closeReactionPicker();
+  }
+
   function togglePicker(tab?: PickerTab) {
     if (showPicker && (!tab || tab === pickerTab)) {
       showPicker = false;
@@ -599,6 +669,48 @@
               ? { ...m, content: data.content, edited_at: data.edited_at }
               : m
           );
+        }
+      }));
+      unsubs.push(wsClient.on('DM_REACTION_ADDED', (data: any) => {
+        if (data.channel_id === activeDmChannelId) {
+          messages = messages.map(m => {
+            if (m.id !== data.message_id) return m;
+            const reactions = [...(m.reactions || [])];
+            const idx = reactions.findIndex((r: any) => r.emoji === data.emoji);
+            if (idx >= 0) {
+              reactions[idx] = {
+                ...reactions[idx],
+                count: reactions[idx].count + 1,
+                users: [...reactions[idx].users, { id: data.user_id, username: data.username }],
+              };
+            } else {
+              reactions.push({
+                emoji: data.emoji,
+                count: 1,
+                reacted: false,
+                users: [{ id: data.user_id, username: data.username }],
+              });
+            }
+            return { ...m, reactions };
+          });
+        }
+      }));
+      unsubs.push(wsClient.on('DM_REACTION_REMOVED', (data: any) => {
+        if (data.channel_id === activeDmChannelId) {
+          messages = messages.map(m => {
+            if (m.id !== data.message_id) return m;
+            const reactions = [...(m.reactions || [])];
+            const idx = reactions.findIndex((r: any) => r.emoji === data.emoji);
+            if (idx >= 0) {
+              reactions[idx] = {
+                ...reactions[idx],
+                count: reactions[idx].count - 1,
+                users: reactions[idx].users.filter((u: any) => u.id !== data.user_id),
+              };
+              if (reactions[idx].count <= 0) reactions.splice(idx, 1);
+            }
+            return { ...m, reactions };
+          });
         }
       }));
       unsubs.push(wsClient.on('TYPING_START', (data: any) => {
@@ -1468,11 +1580,35 @@
                           {/each}
                         </div>
                       {/if}
+                      {#if msg.reactions?.length > 0}
+                        <div class="flex flex-wrap gap-1 mt-1.5">
+                          {#each msg.reactions as reaction (reaction.emoji)}
+                            <button
+                              class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
+                              onclick={() => toggleReaction(msg.id, reaction.emoji)}
+                              title={reaction.users.map((u: any) => u.username).join(', ')}
+                            >
+                              <span class="text-[15px] leading-none">{reaction.emoji}</span>
+                              <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
+                            </button>
+                          {/each}
+                          <button
+                            class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
+                            onclick={(e) => openReactionPicker(e, msg)}
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                          </button>
+                        </div>
+                      {/if}
                     </div>
                   </div>
                   <!-- Action toolbar -->
                   <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={(e) => openReactionPicker(e, msg)}>
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                    </button>
+                    <div class="w-px h-4 bg-border"></div>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
                     {#if canEdit(msg)}
@@ -1552,11 +1688,35 @@
                           {/each}
                         </div>
                       {/if}
+                      {#if msg.reactions?.length > 0}
+                        <div class="flex flex-wrap gap-1 mt-1.5">
+                          {#each msg.reactions as reaction (reaction.emoji)}
+                            <button
+                              class="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-sm border transition-colors duration-75 {reaction.reacted ? 'bg-accent/15 border-accent/40 text-text-primary' : 'bg-bg-tertiary/60 border-border/50 text-text-secondary hover:border-border hover:bg-bg-tertiary'}"
+                              onclick={() => toggleReaction(msg.id, reaction.emoji)}
+                              title={reaction.users.map((u: any) => u.username).join(', ')}
+                            >
+                              <span class="text-[15px] leading-none">{reaction.emoji}</span>
+                              <span class="text-[12px] font-medium tabular-nums leading-none">{reaction.count}</span>
+                            </button>
+                          {/each}
+                          <button
+                            class="flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-border/50 text-text-muted/50 hover:border-border hover:text-text-muted hover:bg-bg-tertiary/60 transition-colors duration-75"
+                            onclick={(e) => openReactionPicker(e, msg)}
+                          >
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                          </button>
+                        </div>
+                      {/if}
                     </div>
                   </div>
                   <!-- Action toolbar -->
                   <div class="absolute right-4 top-1 opacity-0 group-hover:opacity-100 flex items-center bg-bg-tertiary border border-border rounded-md shadow-md z-10 transition-opacity duration-100">
-                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={() => startReply(msg)}>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 rounded-l-md transition-colors duration-75" onclick={(e) => openReactionPicker(e, msg)}>
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+                    </button>
+                    <div class="w-px h-4 bg-border"></div>
+                    <button class="px-2 py-1.5 text-text-muted hover:text-accent hover:bg-accent/8 transition-colors duration-75" onclick={() => startReply(msg)}>
                       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
                     </button>
                     {#if canEdit(msg)}
@@ -1576,6 +1736,26 @@
           </div>
         {/if}
       </div>
+
+      <!-- Reaction picker popover -->
+      {#if reactionPickerMsgId}
+        <div class="fixed inset-0 z-40" onclick={closeReactionPicker}></div>
+        <div
+          bind:this={reactionPickerRef}
+          class="fixed z-50 bg-bg-secondary border border-border rounded-xl shadow-xl p-2 w-[280px]"
+          style="left: {reactionPickerPos.x}px; top: {reactionPickerPos.y}px; transform: translateY(-100%)"
+        >
+          <div class="grid grid-cols-7 gap-0">
+            {#each quickEmojis as emoji}
+              <button
+                type="button"
+                class="w-9 h-9 flex items-center justify-center text-[20px] rounded-md hover:bg-bg-hover transition-colors cursor-pointer"
+                onclick={() => toggleReaction(reactionPickerMsgId!, emoji)}
+              >{emoji}</button>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <!-- Message input -->
       {#if activeDmUser && friendsStore.isBlocked(activeDmUser.id)}

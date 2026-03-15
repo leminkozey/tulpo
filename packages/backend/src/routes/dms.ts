@@ -283,6 +283,44 @@ dms.get("/:id/messages", async (c) => {
     }
   }
 
+  // Batch-fetch reactions for all messages
+  if (messages.length > 0) {
+    const messageIds = messages.map((m: any) => m.id);
+    const placeholders = messageIds.map(() => "?").join(",");
+    const reactions = db
+      .query(
+        `SELECT r.message_id, r.emoji, r.user_id, u.username
+         FROM dm_reactions r
+         JOIN users u ON r.user_id = u.id
+         WHERE r.message_id IN (${placeholders})
+         ORDER BY r.created_at ASC`
+      )
+      .all(...messageIds) as any[];
+
+    // Group by message_id → emoji → users
+    const reactionMap = new Map<string, Map<string, { user_id: string; username: string }[]>>();
+    for (const r of reactions) {
+      if (!reactionMap.has(r.message_id)) reactionMap.set(r.message_id, new Map());
+      const emojiMap = reactionMap.get(r.message_id)!;
+      if (!emojiMap.has(r.emoji)) emojiMap.set(r.emoji, []);
+      emojiMap.get(r.emoji)!.push({ user_id: r.user_id, username: r.username });
+    }
+
+    for (const msg of messages) {
+      const emojiMap = reactionMap.get(msg.id);
+      if (emojiMap) {
+        (msg as any).reactions = Array.from(emojiMap.entries()).map(([emoji, users]) => ({
+          emoji,
+          count: users.length,
+          users: users.map(u => ({ id: u.user_id, username: u.username })),
+          reacted: users.some(u => u.user_id === user.id),
+        }));
+      } else {
+        (msg as any).reactions = [];
+      }
+    }
+  }
+
   return c.json(messages);
 });
 
@@ -388,6 +426,22 @@ dms.post("/:id/messages", async (c) => {
 
   if (!participant || participant.status !== "active") {
     return c.json({ error: "Not found" }, 404);
+  }
+
+  // Check if either user has blocked the other (1:1 DMs only)
+  const channel = db.query("SELECT is_group FROM dm_channels WHERE id = ?").get(channelId) as any;
+  if (!channel?.is_group) {
+    const otherParticipant = db.query(
+      "SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ?"
+    ).get(channelId, user.id) as any;
+    if (otherParticipant) {
+      const blocked = db.query(
+        "SELECT 1 FROM user_blocks WHERE (user_id = ? AND blocked_id = ?) OR (user_id = ? AND blocked_id = ?)"
+      ).get(user.id, otherParticipant.user_id, otherParticipant.user_id, user.id);
+      if (blocked) {
+        return c.json({ error: "Cannot send messages to this user" }, 403);
+      }
+    }
   }
 
   // Validate reply_to_id if provided
@@ -1127,6 +1181,135 @@ dms.delete("/:id", async (c) => {
   db.run(
     "UPDATE dm_participants SET status = 'deleted' WHERE dm_channel_id = ? AND user_id = ?",
     [channelId, user.id]
+  );
+
+  return c.json({ ok: true });
+});
+
+// Add a reaction to a message
+dms.put("/:id/messages/:messageId/reactions", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const messageId = c.req.param("messageId");
+  const { emoji } = await c.req.json();
+  const db = getDb();
+
+  if (!emoji || typeof emoji !== "string" || emoji.length > 32) {
+    return c.json({ error: "Invalid emoji" }, 400);
+  }
+
+  // Verify participant
+  const participant = db
+    .query("SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'")
+    .get(channelId, user.id) as any;
+  if (!participant) return c.json({ error: "Not found" }, 404);
+
+  // Verify message exists
+  const msg = db
+    .query("SELECT id FROM dm_messages WHERE id = ? AND dm_channel_id = ?")
+    .get(messageId, channelId) as any;
+  if (!msg) return c.json({ error: "Message not found" }, 404);
+
+  // Max 20 unique emojis per message
+  const emojiCount = db
+    .query("SELECT COUNT(DISTINCT emoji) as cnt FROM dm_reactions WHERE message_id = ?")
+    .get(messageId) as any;
+  const alreadyHas = db
+    .query("SELECT 1 FROM dm_reactions WHERE message_id = ? AND emoji = ?")
+    .get(messageId, emoji);
+  if (!alreadyHas && emojiCount.cnt >= 20) {
+    return c.json({ error: "Too many different reactions on this message" }, 400);
+  }
+
+  // Insert (ignore if already exists)
+  db.run(
+    "INSERT OR IGNORE INTO dm_reactions (message_id, user_id, emoji) VALUES (?, ?, ?)",
+    [messageId, user.id, emoji]
+  );
+
+  // Notify other participants
+  const participants = db
+    .query("SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'")
+    .all(channelId, user.id) as any[];
+
+  for (const p of participants) {
+    sendToUser(p.user_id, "DM_REACTION_ADDED", {
+      channel_id: channelId,
+      message_id: messageId,
+      emoji,
+      user_id: user.id,
+      username: user.username,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+// Remove a reaction from a message
+dms.delete("/:id/messages/:messageId/reactions", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const messageId = c.req.param("messageId");
+  const emoji = c.req.query("emoji");
+  const db = getDb();
+
+  if (!emoji) {
+    return c.json({ error: "emoji query param required" }, 400);
+  }
+
+  // Verify participant
+  const participant = db
+    .query("SELECT status FROM dm_participants WHERE dm_channel_id = ? AND user_id = ? AND status = 'active'")
+    .get(channelId, user.id) as any;
+  if (!participant) return c.json({ error: "Not found" }, 404);
+
+  db.run(
+    "DELETE FROM dm_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+    [messageId, user.id, emoji]
+  );
+
+  // Notify other participants
+  const participants = db
+    .query("SELECT user_id FROM dm_participants WHERE dm_channel_id = ? AND user_id != ? AND status = 'active'")
+    .all(channelId, user.id) as any[];
+
+  for (const p of participants) {
+    sendToUser(p.user_id, "DM_REACTION_REMOVED", {
+      channel_id: channelId,
+      message_id: messageId,
+      emoji,
+      user_id: user.id,
+    });
+  }
+
+  return c.json({ ok: true });
+});
+
+// Report a message or file
+dms.post("/:id/messages/:messageId/report", async (c) => {
+  const user = c.get("user");
+  const channelId = c.req.param("id");
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+
+  // Verify user is participant
+  const participant = db
+    .query("SELECT 1 FROM dm_participants WHERE dm_channel_id = ? AND user_id = ?")
+    .get(channelId, user.id);
+  if (!participant) return c.json({ error: "Not a participant" }, 403);
+
+  // Verify message exists
+  const message = db
+    .query("SELECT 1 FROM dm_messages WHERE id = ? AND dm_channel_id = ?")
+    .get(messageId, channelId);
+  if (!message) return c.json({ error: "Message not found" }, 404);
+
+  const body = await c.req.json<{ type?: string; reason?: string; filename?: string }>();
+
+  db.run(
+    `INSERT INTO reports (reporter_id, dm_channel_id, message_id, type, filename, reason)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [user.id, channelId, messageId, body.type || "message", body.filename || null, body.reason || ""]
   );
 
   return c.json({ ok: true });

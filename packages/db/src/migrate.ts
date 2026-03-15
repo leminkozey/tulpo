@@ -6,13 +6,16 @@ import { migration004 } from "./migrations/004_message_deletion";
 import { migration005 } from "./migrations/005_message_replies";
 import { migration006 } from "./migrations/006_dm_attachments";
 import { migration007 } from "./migrations/007_upload_security";
+import { migration008 } from "./migrations/008_reports";
+import { migration009 } from "./migrations/009_blocks_mutes";
+import { migration010 } from "./migrations/010_emoji_reactions";
 
 interface Migration {
   name: string;
   up: (db: ReturnType<typeof getDb>) => void;
 }
 
-const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006, migration007];
+const migrations: Migration[] = [migration001, migration002, migration003, migration004, migration005, migration006, migration007, migration008, migration009, migration010];
 
 export function runMigrations() {
   const db = getDb();
