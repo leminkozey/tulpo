@@ -1458,8 +1458,9 @@
           </button>
         {:else}
           {@const friend = item.friend}
-          <button
-            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group {activeDmUser?.id === friend.user.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors duration-150 text-left group cursor-pointer {activeDmUser?.id === friend.user.id ? 'bg-bg-hover/70' : 'hover:bg-bg-hover/50'}"
             onclick={() => openDm(friend)}
             oncontextmenu={(e) => handleContextMenu(e, 'friend', { friend: friend })}
           >
@@ -1481,7 +1482,12 @@
             {#if unreadCounts[friend.user.id]}
               <span class="bg-danger text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{unreadCounts[friend.user.id]}</span>
             {/if}
-          </button>
+            {#if !voiceStore.activeCall}
+              <button onclick={(e) => { e.stopPropagation(); const ch = dmChannels.find(c => !c.is_group && c.participants?.some((p: any) => p.id === friend.user.id)); if (ch) voiceStore.initiateCall(ch.id); }} class="w-7 h-7 rounded-md flex items-center justify-center text-text-muted hover:text-success hover:bg-bg-hover/80 transition-all duration-150 flex-shrink-0" aria-label="Call">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+              </button>
+            {/if}
+          </div>
         {/if}
       {:else}
         {#if dmSearch.trim()}
@@ -2260,7 +2266,8 @@
             {#if onlineFriends.length > 0}
               <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-[0.05em] px-2 mb-2">Online — {onlineFriends.length}</h3>
               {#each onlineFriends as friend (friend.id)}
-                <button onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left">
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left cursor-pointer">
                   <div class="relative">
                     <div class="w-8 h-8 rounded-full overflow-hidden">
                       {#if friend.user.avatar_url}
@@ -2275,7 +2282,12 @@
                     <p class="text-sm font-medium text-text-primary">{friend.user.display_name || friend.user.username}</p>
                     <p class="text-[11px] text-text-muted capitalize">{friend.user.status}</p>
                   </div>
-                </button>
+                  {#if !voiceStore.activeCall}
+                    <button onclick={(e) => { e.stopPropagation(); const ch = dmChannels.find(c => !c.is_group && c.participants?.some((p: any) => p.id === friend.user.id)); if (ch) voiceStore.initiateCall(ch.id); }} class="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-success hover:bg-success/10 transition-all duration-150 flex-shrink-0" aria-label="Call">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    </button>
+                  {/if}
+                </div>
               {/each}
             {:else}
               <div class="flex flex-col items-center justify-center py-20 text-center"><p class="text-text-secondary text-sm">Nobody's around right now. Maybe they're all touching grass?</p></div>
@@ -2286,7 +2298,8 @@
             {#if allFriends.length > 0}
               <h3 class="text-[11px] font-semibold text-text-muted uppercase tracking-[0.05em] px-2 mb-2">All Friends — {allFriends.length}</h3>
               {#each allFriends as friend (friend.id)}
-                <button onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left">
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div onclick={() => openDm(friend)} class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-bg-hover/50 group transition-colors duration-150 text-left cursor-pointer">
                   <div class="relative">
                     <div class="w-8 h-8 rounded-full overflow-hidden">
                       {#if friend.user.avatar_url}
@@ -2301,7 +2314,12 @@
                     <p class="text-sm font-medium text-text-primary">{friend.user.display_name || friend.user.username}</p>
                     <p class="text-[11px] text-text-muted capitalize">{friend.user.status}</p>
                   </div>
-                </button>
+                  {#if !voiceStore.activeCall}
+                    <button onclick={(e) => { e.stopPropagation(); const ch = dmChannels.find(c => !c.is_group && c.participants?.some((p: any) => p.id === friend.user.id)); if (ch) voiceStore.initiateCall(ch.id); }} class="w-8 h-8 rounded-full flex items-center justify-center text-text-muted hover:text-success hover:bg-success/10 transition-all duration-150 flex-shrink-0" aria-label="Call">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    </button>
+                  {/if}
+                </div>
               {/each}
             {:else}
               <div class="flex flex-col items-center justify-center py-20 text-center">
